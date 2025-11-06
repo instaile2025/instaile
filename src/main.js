@@ -2,37 +2,42 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import { registerPlugins } from '@/plugins'
 
-// OneSignal
-import OneSignal from '@onesignal/onesignal'
-
 // Styles
 import 'unfonts.css'
 
 const app = createApp(App)
 
-// OneSignal Başlat
+// ✅ OneSignal Başlat
 const initOneSignal = async () => {
   const appId = import.meta.env.VITE_ONESIGNAL_APP_ID
-  if (!appId) return
+  if (!appId) {
+    console.warn("⚠️ VITE_ONESIGNAL_APP_ID .env içinde yok!")
+    return
+  }
+
+  // ✅ CDN yüklenmiş mi?
+  if (typeof window.OneSignal === "undefined") {
+    console.warn("⚠️ OneSignal SDK henüz yüklenmedi. index.html kontrol et.")
+    return
+  }
 
   try {
-    await OneSignal.init({
+    await window.OneSignal.init({
       appId,
       allowLocalhostAsSecureOrigin: true,
-      serviceWorkerPath: '/onesignal/OneSignalSDKWorker.js',
-      notificationClickHandlerMatch: 'origin',
-      notificationClickHandlerAction: 'navigate',
+      notificationClickHandlerAction: "navigate",
     })
 
-    OneSignal.Slidedown.promptPush()
-    console.log('✅ OneSignal Başlatıldı')
+    window.OneSignal.Slidedown.promptPush()
+
+    console.log("✅ OneSignal Başlatıldı")
   } catch (err) {
-    console.error('❌ OneSignal Hatası:', err)
+    console.error("❌ OneSignal Hatası:", err)
   }
 }
 
 initOneSignal()
 
-app.config.globalProperties.$onesignal = OneSignal
+// Plugins ve App Başlat
 registerPlugins(app)
 app.mount('#app')
