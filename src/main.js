@@ -7,37 +7,37 @@ import 'unfonts.css'
 
 const app = createApp(App)
 
-// ✅ OneSignal Başlat
+// OneSignal Başlat
 const initOneSignal = async () => {
   const appId = import.meta.env.VITE_ONESIGNAL_APP_ID
-  if (!appId) {
-    console.warn("⚠️ VITE_ONESIGNAL_APP_ID .env içinde yok!")
-    return
-  }
+  if (!appId) return
 
-  // ✅ CDN yüklenmiş mi?
-  if (typeof window.OneSignal === "undefined") {
-    console.warn("⚠️ OneSignal SDK henüz yüklenmedi. index.html kontrol et.")
-    return
-  }
-
-  try {
-    await window.OneSignal.init({
-      appId,
-      allowLocalhostAsSecureOrigin: true,
-      notificationClickHandlerAction: "navigate",
+  // Önce global bekle
+  if (!window.OneSignal) {
+    await new Promise(resolve => {
+      const check = setInterval(() => {
+        if (window.OneSignal) {
+          clearInterval(check)
+          resolve()
+        }
+      }, 50)
     })
-
-    window.OneSignal.Slidedown.promptPush()
-
-    console.log("✅ OneSignal Başlatıldı")
-  } catch (err) {
-    console.error("❌ OneSignal Hatası:", err)
   }
+
+  const OneSignal = window.OneSignal
+
+  await OneSignal.init({
+    appId,
+    allowLocalhostAsSecureOrigin: true,
+    notificationClickHandlerMatch: 'origin',
+    notificationClickHandlerAction: 'navigate',
+  })
+
+  OneSignal.Slidedown.promptPush()
+  console.log("✅ OneSignal Başlatıldı")
 }
 
 initOneSignal()
 
-// Plugins ve App Başlat
 registerPlugins(app)
 app.mount('#app')
