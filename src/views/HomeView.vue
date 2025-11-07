@@ -16,6 +16,16 @@
               <strong>{{ post.authorUsername }}</strong>
               <span class="text-grey text-caption"> · {{ formatTime(post.$createdAt) }}</span>
             </div>
+
+            <!-- ✅ Admin Controls -->
+            <div v-if="isAdmin" class="ml-auto d-flex">
+              <v-btn icon @click="editPost(post)">
+                <v-icon>mdi-pencil</v-icon>
+              </v-btn>
+              <v-btn icon color="red" @click="deletePost(post)">
+                <v-icon>mdi-delete</v-icon>
+              </v-btn>
+            </div>
           </v-card-title>
 
           <!-- Metin -->
@@ -140,6 +150,9 @@ const newCommentText = ref({})
 // ✅ Avatar Cache
 const avatarCache = ref({})
 
+// ✅ Admin kontrolü
+let isAdmin = false
+
 // ✅ Avatar URL Getir
 const fetchUserAvatar = async (userId, username) => {
   if (avatarCache.value[userId]) return avatarCache.value[userId]
@@ -170,9 +183,32 @@ const mapPostDocument = async (doc, user) => {
 
 const mapCommentDocument = (doc) => ({ ...doc })
 
+// ✅ Silme ve Düzenleme Fonksiyonları
+const deletePost = async (post) => {
+  if (!confirm("Bu gönderiyi silmek istediğine emin misin?")) return
+  try {
+    await databases.deleteDocument("main", "posts", post.$id)
+    posts.value = posts.value.filter(p => p.$id !== post.$id)
+  } catch (err) {
+    console.error("Gönderi silme hatası:", err)
+  }
+}
+
+const editPost = async (post) => {
+  const newText = prompt("Yeni metni gir:", post.text)
+  if (newText === null) return
+  try {
+    await databases.updateDocument("main", "posts", post.$id, { text: newText })
+    post.text = newText
+  } catch (err) {
+    console.error("Gönderi güncelleme hatası:", err)
+  }
+}
+
 // ✅ Ana yükleme & realtime
 const subscribeToContent = async () => {
   currentUser = await account.get().catch(() => null)
+  isAdmin = currentUser?.isAdmin || false
 
   const postsRes = await databases.listDocuments('main', 'posts', [ Query.orderDesc('$createdAt') ])
   const commentsRes = await databases.listDocuments('main', 'comments', [ Query.orderAsc('$createdAt') ])
