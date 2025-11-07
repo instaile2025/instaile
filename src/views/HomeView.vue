@@ -208,7 +208,9 @@ const editPost = async (post) => {
 // ✅ Ana yükleme & realtime
 const subscribeToContent = async () => {
   currentUser = await account.get().catch(() => null)
-  isAdmin = currentUser?.isAdmin || false
+  
+  // 🔹 Admin kontrolü kesin çalışacak
+  isAdmin = currentUser?.isAdmin === true || currentUser?.isAdmin === "true"
 
   const postsRes = await databases.listDocuments('main', 'posts', [ Query.orderDesc('$createdAt') ])
   const commentsRes = await databases.listDocuments('main', 'comments', [ Query.orderAsc('$createdAt') ])
