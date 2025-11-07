@@ -18,7 +18,7 @@
             </div>
 
             <!-- ✅ Admin Controls -->
-            <div v-if="isAdmin" class="ml-auto d-flex">
+            <div v-if="isAdmin.value" class="ml-auto d-flex">
               <v-btn icon @click="editPost(post)">
                 <v-icon>mdi-pencil</v-icon>
               </v-btn>
@@ -138,7 +138,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { databases, account, avatars, Query, client, ID } from '@/plugins/appwrite'
 
 const posts = ref([])
-let currentUser = null
+const currentUser = ref(null)
 let unsubscribePosts = null
 let unsubscribeComments = null
 
@@ -151,7 +151,7 @@ const newCommentText = ref({})
 const avatarCache = ref({})
 
 // ✅ Admin kontrolü
-let isAdmin = false
+const isAdmin = ref(false)
 
 // ✅ Avatar URL Getir
 const fetchUserAvatar = async (userId, username) => {
@@ -207,24 +207,30 @@ const editPost = async (post) => {
 
 // ✅ Ana yükleme & realtime
 const subscribeToContent = async () => {
-  currentUser = await account.get().catch(() => null)
+  currentUser.value = await account.get().catch(() => null)
   
   // 🔹 Admin kontrolü kesin çalışacak
-  isAdmin = currentUser?.isAdmin === true || currentUser?.isAdmin === "true"
+  try {
+    const userDoc = await databases.getDocument('main', 'users', currentUser.value.$id)
+    isAdmin.value = userDoc.isAdmin === true || userDoc.isAdmin === "true"
+  } catch (err) {
+    console.error("Admin check error:", err)
+    isAdmin.value = false
+  }
 
   const postsRes = await databases.listDocuments('main', 'posts', [ Query.orderDesc('$createdAt') ])
   const commentsRes = await databases.listDocuments('main', 'comments', [ Query.orderAsc('$createdAt') ])
   const allComments = commentsRes.documents.map(mapCommentDocument)
 
   posts.value = await Promise.all(postsRes.documents.map(async doc => {
-    const mapped = await mapPostDocument(doc, currentUser)
+    const mapped = await mapPostDocument(doc, currentUser.value)
     mapped.comments = allComments.filter(c => c.postId === doc.$id)
     return mapped
   }))
 
   unsubscribePosts = client.subscribe('databases.main.collections.posts.documents', async response => {
     const doc = response.payload
-    const updated = await mapPostDocument(doc, currentUser)
+    const updated = await mapPostDocument(doc, currentUser.value)
 
     if (response.events[0].includes('create')) {
       updated.comments = []
@@ -249,12 +255,12 @@ const subscribeToContent = async () => {
 
 // ✅ Yorum Gönder
 const handleCommentSubmit = async (post) => {
-  if (!currentUser) return alert("Giriş yapmalısın.")
+  if (!currentUser.value) return alert("Giriş yapmalısın.")
   const text = newCommentText.value[post.$id]
   if (!text?.trim()) return
   await databases.createDocument('main', 'comments', ID.unique(), {
     postId: post.$id,
-    authorUsername: currentUser.name,
+    authorUsername: currentUser.value.name,
     text
   })
   newCommentText.value[post.$id] = ''
@@ -262,9 +268,9 @@ const handleCommentSubmit = async (post) => {
 
 // ✅ Like
 const toggleLike = async (post) => {
-  if (!currentUser) return alert("Giriş yapmalısın.")
-  const uid = currentUser.$id
-  const uname = currentUser.name
+  if (!currentUser.value) return alert("Giriş yapmalısın.")
+  const uid = currentUser.value.$id
+  const uname = currentUser.value.name
   let likes = [...post.likes]
   let names = [...post.likeUsernames]
 
