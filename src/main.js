@@ -17,39 +17,42 @@ const initOneSignal = async () => {
   }
 
   try {
-    // OneSignal SDK'nın yüklenmesini bekle
-    if (!window.OneSignal) {
+    // OneSignal SDK'sını global olarak ekleyen script'i beklememiz gerekebilir
+    // Eğer index.html dosyanızda <script src="https://cdn.onesignal.com/sdks/OneSignalSDK.js" ...>
+    // satırı varsa, bu kontrol gereklidir.
+    if (typeof window.OneSignal === 'undefined') {
       await new Promise((resolve, reject) => {
         let attempts = 0
         const check = setInterval(() => {
           attempts++
-          if (window.OneSignal) {
+          if (typeof window.OneSignal !== 'undefined') {
             clearInterval(check)
             resolve()
           } else if (attempts > 100) { // 10 saniye timeout
             clearInterval(check)
-            reject(new Error("OneSignal SDK yüklenemedi"))
+            reject(new Error("OneSignal SDK (window.OneSignal) bulunamadı veya yüklenemedi"))
           }
         }, 100)
       })
     }
 
-    // OneSignal'i başlat
+    // OneSignal'i başlat - PWA Entegrasyonu için DÜZELTİLDİ
     await window.OneSignal.init({
       appId: appId,
-      allowLocalhostAsSecureOrigin: true,
-      serviceWorkerParam: { 
-        scope: "/onesignal/" 
-      },
-      serviceWorkerPath: "onesignal/OneSignalSDKWorker.js",
-      notificationClickHandlerMatch: 'origin',
-      notificationClickHandlerAction: 'navigate',
+      allowLocalhostAsSecureOrigin: true, // Geliştirme ortamı için
+      
+      // --- BURASI DEĞİŞTİ ---
+      // Sizin PWA service worker dosyanızı kullanmasını söylüyoruz
+      // Yanlış olan 'scope' ve 'onesignal/' klasör ayarları kaldırıldı.
+      serviceWorkerPath: 'sw.PWA.js',
+      serviceWorkerUpdaterPath: 'sw.PWA.js'
+      // --------------------
     })
 
     // Slidedown prompt'u göster
     window.OneSignal.Slidedown.promptPush()
     
-    console.log("✅ OneSignal Başlatıldı - App ID:", appId)
+    console.log("✅ OneSignal Başlatıldı (PWA modu) - App ID:", appId)
 
   } catch (error) {
     console.error("❌ OneSignal başlatılamadı:", error)
@@ -61,4 +64,3 @@ initOneSignal()
 
 registerPlugins(app)
 app.mount('#app')
-//TEST

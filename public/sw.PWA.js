@@ -1,3 +1,12 @@
+// public/sw.PWA.js dosyasının tam içeriği
+
+// 1. ADIM: OneSignal'ın Service Worker'ını buraya ithal (import) ediyoruz
+// Bu satır MUTLAKA en üstte olmalı
+importScripts('https://cdn.onesignal.com/sdks/OneSignalSDKWorker.js');
+
+
+// --- Sizin mevcut PWA kodunuz buradan başlıyor ---
+
 self.addEventListener('install', event => {
   console.log('Service Worker installed');
 });
