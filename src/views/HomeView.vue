@@ -7,9 +7,18 @@
 
           <!-- Yazar -->
           <v-card-title class="d-flex align-center py-3">
+            
+            <!-- BÖLÜM 12.7'deki (Hızlı) Avatar Mantığımız -->
             <v-avatar size="42">
-              <v-img v-if="post.avatarUrl" :src="post.avatarUrl" cover/>
-              <span v-else class="text-h6">{{ post.authorUsername.charAt(0).toUpperCase() }}</span>
+              <v-img
+                v-if="post.authorAvatarUrl"
+                :src="post.authorAvatarUrl"
+                cover
+              ></v-img>
+              <v-img
+                v-else
+                :src="getUserAvatar(post.authorUsername)"
+              ></v-img>
             </v-avatar>
             
             <div class="ml-3">
@@ -17,15 +26,17 @@
               <span class="text-grey text-caption"> · {{ formatTime(post.$createdAt) }}</span>
             </div>
 
-            <!-- ✅ Admin Controls -->
-            <div v-if="isAdmin.value" class="ml-auto d-flex">
-              <v-btn icon @click="editPost(post)">
-                <v-icon>mdi-pencil</v-icon>
+            <!-- === YENİ: ADMİN KONTROLLERİ (Sizin Fikriniz) === -->
+            <!-- DÜZELTME: v-if="isAdmin.value" yerine v-if="isAdmin" (Template içinde .value gerekmez) -->
+            <div v-if="isAdmin" class="ml-auto d-flex">
+              <v-btn icon size="small" @click="editPost(post)">
+                <v-icon size="small">mdi-pencil</v-icon>
               </v-btn>
-              <v-btn icon color="red" @click="deletePost(post)">
-                <v-icon>mdi-delete</v-icon>
+              <v-btn icon size="small" color="red-darken-1" @click="deletePost(post)">
+                <v-icon size="small">mdi-delete</v-icon>
               </v-btn>
             </div>
+            
           </v-card-title>
 
           <!-- Metin -->
@@ -33,8 +44,12 @@
             {{ post.text }}
           </v-card-text>
 
-          <!-- Medya -->
-          <div class="media-wrapper" @dblclick="handleDoubleClickLike(post, index)">
+          <!-- Medya (Video/Ses/Resim) -->
+          <div 
+            class="media-wrapper" 
+            @dblclick="handleDoubleClickLike(post, index)"
+          >
+            <!-- Patlayan Kalp Animasyonu -->
             <v-icon 
               :ref="el => setPoppingHeartRef(el, index)" 
               class="like-heart-animation"
@@ -43,23 +58,28 @@
             >
               mdi-heart
             </v-icon>
-
+            
             <v-img
               v-if="post.postType === 'image'"
               :src="post.mediaUrl"
               class="my-3"
-              style="max-height: 420px; width: 100%; object-fit: contain; background: #111; cursor: pointer;"
+              style="
+                max-height: 420px;
+                width: 100%;
+                object-fit: contain;
+                background: #111;
+                cursor: pointer;
+              "
             />
-
-            <video
+             <video
               v-else-if="post.postType === 'video'"
               :src="post.mediaUrl"
               controls
               class="my-3"
               style="width: 100%; height: auto; max-height: 420px; cursor: pointer;"
+              @dblclick="handleDoubleClickLike(post, index)"
             ></video>
-
-            <audio
+             <audio
               v-else-if="post.postType === 'audio'"
               :src="post.mediaUrl"
               controls
@@ -68,7 +88,7 @@
             ></audio>
           </div>
 
-          <!-- Like ve Beğeniler -->
+          <!-- Like Butonu ve Beğenenler -->
           <v-card-actions class="d-flex justify-space-between align-center px-4 pb-3">
             <v-btn
               variant="text"
@@ -89,30 +109,32 @@
               </span>
               beğendi.
             </span>
+            
+            <v-spacer></v-spacer> 
 
-            <v-spacer></v-spacer>
-
+            <!-- Yorum Sayacı -->
             <v-btn variant="text" icon disabled>
               <v-icon size="26">mdi-chat-outline</v-icon>
               <span class="ml-1 text-body-2">{{ post.comments.length }}</span>
             </v-btn>
+
           </v-card-actions>
-
+          
+          <!-- YORUM BÖLÜMÜ (Direk Açık) -->
           <v-divider></v-divider>
-
-          <!-- Yorum Listesi -->
+          
           <div class="px-4 py-2">
             <div v-if="post.comments.length === 0" class="text-caption text-grey">
               Henüz yorum yok. İlk yorumu yapın!
             </div>
-
+            
             <div v-for="comment in post.comments" :key="comment.$id" class="mb-1">
               <span class="font-weight-bold text-body-2">{{ comment.authorUsername }}</span>
               <span class="text-body-2"> {{ comment.text }}</span>
             </div>
           </div>
 
-          <!-- Yorum Ekleme -->
+          <!-- Yorum Ekleme Formu -->
           <v-card-text class="pt-0">
             <v-text-field
               v-model="newCommentText[post.$id]"
@@ -135,201 +157,321 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { databases, account, avatars, Query, client, ID } from '@/plugins/appwrite'
+// YENİ: Pinia Store'u import ediyoruz (Admin kontrolü için)
+import { useAuthStore } from '@/stores/auth' 
+import { databases, account, avatars, Query, client, ID, storage } from '@/plugins/appwrite'
 
 const posts = ref([])
-const currentUser = ref(null)
-let unsubscribePosts = null
-let unsubscribeComments = null
+let currentUser = null
+let unsubscribePosts = null 
+let unsubscribeComments = null 
+
+// YENİ: Pinia Store'u çağır
+const authStore = useAuthStore() 
+// YENİ: Admin durumunu store'dan al (Sizin yavaş 'getDocument' kodunuz yerine)
+const isAdmin = ref(authStore.isAdmin) 
 
 const poppingHeartRefs = ref([])
-const setPoppingHeartRef = (el, index) => { if (el) poppingHeartRefs.value[index] = el }
+const setPoppingHeartRef = (el, index) => {
+  if (el) {
+    poppingHeartRefs.value[index] = el
+  }
+}
 
 const newCommentText = ref({})
 
-// ✅ Avatar Cache
-const avatarCache = ref({})
-
-// ✅ Admin kontrolü
-const isAdmin = ref(false)
-
-// ✅ Avatar URL Getir
-const fetchUserAvatar = async (userId, username) => {
-  if (avatarCache.value[userId]) return avatarCache.value[userId]
-  try {
-    const user = await databases.getDocument("main", "users", userId)
-    if (user.profilePicUrl) {
-      avatarCache.value[userId] = user.profilePicUrl
-      return user.profilePicUrl
-    }
-  } catch {}
-  const fallback = avatars.getInitials(username || '?')
-  avatarCache.value[userId] = fallback
-  return fallback
-}
-
-// ✅ Postları Hazırla
-const mapPostDocument = async (doc, user) => {
+// Gelen 'post' belgesini işler (map eder)
+const mapPostDocument = (doc, user) => {
   return {
     ...doc,
     likes: doc.likes || [],
     likeUsernames: doc.likeUsernames || [],
     likesCount: doc.likesCount || 0,
     isLiked: user ? doc.likes.includes(user.$id) : false,
-    comments: doc.comments || [],
-    avatarUrl: await fetchUserAvatar(doc.authorId, doc.authorUsername)
+    comments: doc.comments || [], 
   }
 }
 
-const mapCommentDocument = (doc) => ({ ...doc })
+const mapCommentDocument = (doc) => {
+  return { ...doc }
+}
 
-// ✅ Silme ve Düzenleme Fonksiyonları
+// === YENİ: ADMİN FONKSİYONLARI (Sizin Kodunuz - Ufak Düzeltmelerle) ===
 const deletePost = async (post) => {
-  if (!confirm("Bu gönderiyi silmek istediğine emin misin?")) return
+  // UYARI: 'confirm' tarayıcıda çalışır ama PWA'da
+  // (veya GitHub Codespace'te) sorun çıkarabilir.
+  // Şimdilik 'confirm' kullanıyoruz, ilerde bunu
+  // güzel bir Vuetify <v-dialog> (modal) ile değiştirmek daha iyi olur.
+  if (!confirm("Bu gönderiyi kalıcı olarak silmek istediğine emin misin?")) return
+  
   try {
+    // 1. Veritabanından belgeyi (document) sil
     await databases.deleteDocument("main", "posts", post.$id)
-    posts.value = posts.value.filter(p => p.$id !== post.$id)
+    console.log('Veritabanı belgesi silindi:', post.$id)
+    
+    // 2. Eğer medya (resim/video) varsa, onu da Storage'dan sil
+    if (post.mediaUrl && post.postType !== 'text') {
+      // mediaUrl'den 'fileId'yi (dosya ID'si) çıkarmamız lazım.
+      // URL şuna benzer: .../files/[FILE_ID]/view
+      const urlParts = post.mediaUrl.split('/')
+      const fileId = urlParts[urlParts.length - 2] // ID'yi al
+      
+      if (fileId) {
+        await storage.deleteFile('posts', fileId)
+        console.log('Storage dosyası silindi:', fileId)
+      }
+    }
+    
+    // 3. (Realtime sayesinde listeyi manuel güncellemeye (filter) gerek yok,
+    // 'delete' olayı (subscribe) bunu otomatik yapacak)
+    
   } catch (err) {
     console.error("Gönderi silme hatası:", err)
+    alert("Hata (Silme): " + err.message)
   }
 }
 
 const editPost = async (post) => {
-  const newText = prompt("Yeni metni gir:", post.text)
-  if (newText === null) return
-  try {
-    await databases.updateDocument("main", "posts", post.$id, { text: newText })
-    post.text = newText
-  } catch (err) {
-    console.error("Gönderi güncelleme hatası:", err)
+  // UYARI: 'prompt' da 'confirm' gibi sorunlu olabilir.
+  const newText = prompt("Yeni metni girin:", post.text)
+  
+  // Eğer kullanıcı 'Cancel' (İptal) demezse
+  if (newText !== null) { 
+    try {
+      // Sadece 'text' alanını güncelle
+      await databases.updateDocument("main", "posts", post.$id, { text: newText })
+      // (Realtime bunu yakalayıp güncelleyecek, post.text = newText'e gerek yok)
+    } catch (err) {
+      console.error("Gönderi güncelleme hatası:", err)
+      alert("Hata (Güncelleme): " + err.message)
+    }
   }
 }
 
-// ✅ Ana yükleme & realtime
+// Ana Yükleme ve Realtime
 const subscribeToContent = async () => {
-  currentUser.value = await account.get().catch(() => null)
+  currentUser = await account.get().catch(() => null)
   
-  // 🔹 Admin kontrolü kesin çalışacak
-  try {
-    const userDoc = await databases.getDocument('main', 'users', currentUser.value.$id)
-    isAdmin.value = userDoc.isAdmin === true || userDoc.isAdmin === "true"
-  } catch (err) {
-    console.error("Admin check error:", err)
-    isAdmin.value = false
-  }
-
-  const postsRes = await databases.listDocuments('main', 'posts', [ Query.orderDesc('$createdAt') ])
-  const commentsRes = await databases.listDocuments('main', 'comments', [ Query.orderAsc('$createdAt') ])
+  // (Pinia store'u zaten BÖLÜM 7'de yüklendi,
+  // bu yüzden 'isAdmin' değeri 'authStore.isAdmin'den
+  // doğru bir şekilde alınmış olmalı.)
+  
+  // 1. Tüm Gönderileri Yükle
+  const postsRes = await databases.listDocuments('main', 'posts', [
+    Query.orderDesc('$createdAt')
+  ])
+  
+  // 2. Tüm Yorumları Yükle
+  const commentsRes = await databases.listDocuments('main', 'comments', [
+    Query.orderAsc('$createdAt')
+  ])
   const allComments = commentsRes.documents.map(mapCommentDocument)
 
-  posts.value = await Promise.all(postsRes.documents.map(async doc => {
-    const mapped = await mapPostDocument(doc, currentUser.value)
-    mapped.comments = allComments.filter(c => c.postId === doc.$id)
-    return mapped
-  }))
-
-  unsubscribePosts = client.subscribe('databases.main.collections.posts.documents', async response => {
-    const doc = response.payload
-    const updated = await mapPostDocument(doc, currentUser.value)
-
-    if (response.events[0].includes('create')) {
-      updated.comments = []
-      posts.value.unshift(updated)
-    } else if (response.events[0].includes('update')) {
-      const i = posts.value.findIndex(p => p.$id === updated.$id)
-      if (i !== -1) updated.comments = posts.value[i].comments
-      posts.value[i] = updated
-    } else if (response.events[0].includes('delete')) {
-      posts.value = posts.value.filter(p => p.$id !== updated.$id)
-    }
+  // 3. Gönderileri ve Yorumları Birleştir
+  posts.value = postsRes.documents.map(doc => {
+    const mappedPost = mapPostDocument(doc, currentUser)
+    mappedPost.comments = allComments.filter(comment => comment.postId === doc.$id)
+    return mappedPost
   })
+  console.log('İlk gönderiler ve yorumlar yüklendi.')
 
-  unsubscribeComments = client.subscribe('databases.main.collections.comments.documents', response => {
-    if (response.events[0].includes('create')) {
-      const c = mapCommentDocument(response.payload)
-      const p = posts.value.find(p => p.$id === c.postId)
-      if (p) p.comments.push(c)
+  // 4. Gönderilere Abone Ol (Realtime)
+  const dbId = 'main'
+  
+  unsubscribePosts = client.subscribe(
+    `databases.${dbId}.collections.posts.documents`, 
+    (response) => {
+      console.log('Realtime POST olayı geldi:', response.events[0])
+      
+      const event = response.events[0]
+      const doc = response.payload
+      const updatedPost = mapPostDocument(doc, currentUser)
+      
+      if (event.includes('create')) {
+        updatedPost.comments = []
+        posts.value.unshift(updatedPost)
+      }
+      else if (event.includes('update')) {
+        const index = posts.value.findIndex(p => p.$id === updatedPost.$id)
+        if (index !== -1) {
+          updatedPost.comments = posts.value[index].comments
+          posts.value[index] = updatedPost
+        }
+      }
+      else if (event.includes('delete')) {
+        posts.value = posts.value.filter(p => p.$id !== updatedPost.$id)
+      }
     }
-  })
+  )
+  
+  // 5. Yorumlara Abone Ol (Realtime)
+  unsubscribeComments = client.subscribe(
+    `databases.${dbId}.collections.comments.documents`,
+    (response) => {
+      console.log('Realtime COMMENT olayı geldi:', response.events[0])
+      
+      if (response.events[0].includes('create')) {
+        const newComment = mapCommentDocument(response.payload)
+        const post = posts.value.find(p => p.$id === newComment.postId)
+        if (post) {
+          post.comments.push(newComment)
+        }
+      }
+    }
+  )
+  
+  console.log('Realtime abonelikleri başlatıldı.')
 }
 
-// ✅ Yorum Gönder
+// Yorum Gönderme
 const handleCommentSubmit = async (post) => {
-  if (!currentUser.value) return alert("Giriş yapmalısın.")
+  if (!currentUser) return alert("Yorum yapmak için giriş yapmalısınız.")
+  
   const text = newCommentText.value[post.$id]
-  if (!text?.trim()) return
-  await databases.createDocument('main', 'comments', ID.unique(), {
-    postId: post.$id,
-    authorUsername: currentUser.value.name,
-    text
-  })
-  newCommentText.value[post.$id] = ''
+  if (!text || text.trim() === '') return 
+
+  try {
+    await databases.createDocument(
+      'main',
+      'comments',
+      ID.unique(),
+      {
+        postId: post.$id, 
+        authorUsername: currentUser.name || 'Anonim',
+        text: text
+      }
+    )
+    newCommentText.value[post.$id] = ''
+  } catch (err) {
+    console.error("Yorum gönderme hatası:", err.message)
+    alert("Yorumunuz gönderilirken bir hata oluştu.")
+  }
 }
 
-// ✅ Like
+// Beğen (Like) Aç/Kapa
 const toggleLike = async (post) => {
-  if (!currentUser.value) return alert("Giriş yapmalısın.")
-  const uid = currentUser.value.$id
-  const uname = currentUser.value.name
-  let likes = [...post.likes]
-  let names = [...post.likeUsernames]
+  if (!currentUser) return alert("Giriş yapman gerekiyor.")
 
+  const userId = currentUser.$id
+  const username = currentUser.name || 'Anonim'
+  let likes = [...(post.likes || [])]
+  let names = [...(post.likeUsernames || [])]
+  
   if (post.isLiked) {
-    likes = likes.filter(id => id !== uid)
-    names = names.filter(n => n !== uname)
+    likes = likes.filter(id => id !== userId)
+    names = names.filter(n => n !== username)
     post.isLiked = false
     post.likesCount--
   } else {
-    likes.push(uid)
-    names.push(uname)
+    likes.push(userId)
+    names.push(username)
     post.isLiked = true
     post.likesCount++
   }
-
+  
   post.likes = likes
   post.likeUsernames = names
 
-  await databases.updateDocument('main', 'posts', post.$id, {
-    likes,
-    likeUsernames: names,
-    likesCount: likes.length
-  })
-}
-
-// ❤️ Double-Click Heart
-const handleDoubleClickLike = (post, i) => {
-  const el = poppingHeartRefs.value[i]?.$el
-  if (el) {
-    el.classList.add('popping')
-    setTimeout(() => el.classList.remove('popping'), 1000)
+  try {
+    await databases.updateDocument('main', 'posts', post.$id, {
+      likes: likes,
+      likeUsernames: names,
+      likesCount: likes.length
+    })
+  } catch (err) {
+    console.error("Like hatası:", err.message)
   }
-  if (!post.isLiked) toggleLike(post)
 }
 
-// ⏱ Zaman Formatı
-const formatTime = (ts) => {
-  const s = (Date.now() - new Date(ts)) / 1000
-  if (s < 60) return "Az önce"
-  if (s < 3600) return Math.floor(s/60) + " dk önce"
-  if (s < 86400) return Math.floor(s/3600) + " saat önce"
-  return Math.floor(s/86400) + " gün önce"
+// Çift Tıklama (DoubleClick) ile Beğenme
+const handleDoubleClickLike = (post, index) => {
+  const heartEl = poppingHeartRefs.value[index]
+  if (heartEl && heartEl.$el) {
+    heartEl.$el.classList.add('popping')
+    setTimeout(() => {
+      heartEl.$el.classList.remove('popping')
+    }, 1000) 
+  }
+  if (!post.isLiked) {
+    toggleLike(post)
+  }
 }
 
-onMounted(subscribeToContent)
-onUnmounted(() => unsubscribePosts?.() || unsubscribeComments?.())
+// Avatar
+const getUserAvatar = (name) => {
+  try {
+    return avatars.getInitials(name || '?')
+  } catch (e) {
+    return avatars.getInitials('?')
+  }
+}
+
+// Zaman
+const formatTime = (timestamp) => {
+  const diff = (Date.now() - new Date(timestamp)) / 1000
+  if (diff < 60) return "Az önce"
+  if (diff < 3600) return Math.floor(diff / 60) + " dk önce"
+  if (diff < 86400) return Math.floor(diff / 3600) + " saat önce"
+  return Math.floor(diff / 86400) + " gün önce"
+}
+
+// Yaşam Döngüsü (Lifecycle)
+onMounted(() => {
+  subscribeToContent()
+})
+
+onUnmounted(() => {
+  if (unsubscribePosts) {
+    unsubscribePosts() 
+    console.log('Gönderi aboneliği sonlandırıldı.')
+  }
+  if (unsubscribeComments) {
+    unsubscribeComments()
+    console.log('Yorum aboneliği sonlandırıldı.')
+  }
+})
 </script>
 
 <style scoped>
-.media-wrapper { position: relative; overflow: hidden; }
+.media-wrapper {
+  position: relative;
+  overflow: hidden; 
+}
+
 .like-heart-animation {
-  position: absolute; top:50%; left:50%;
-  transform: translate(-50%, -50%) scale(0); opacity:0; z-index:10;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  z-index: 10;
+  pointer-events: none; 
 }
-.like-heart-animation.popping { animation: pop .8s ease-out; }
+
+.like-heart-animation.popping {
+  animation: pop 1s ease-out;
+}
+
 @keyframes pop {
-  0% { transform:translate(-50%,-50%) scale(0); opacity:0; }
-  50% { transform:translate(-50%,-50%) scale(1.4); opacity:.9; }
-  100% { transform:translate(-50%,-50%) scale(1.8); opacity:0; }
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.8);
+    opacity: 0;
+  }
 }
-.text-grey { color:#777; }
-</style>
+
+.text-grey { 
+  color: #777; 
+}
+
+.v-card-text .v-text-field {
+  padding-top: 4px;
+}
+</style> 
