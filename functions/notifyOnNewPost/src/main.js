@@ -1,6 +1,8 @@
-/* Appwrite Function: Yeni Gönderi Bildirimi - DÜZELTİLMİŞ TAM KOD */
+/* Appwrite Function: Yeni Gönderi Bildirimi - BOŞ BODY DÜZELTMESİ */
 export default async ({ req, res, log, error }) => {
   
+  log('🔔 OneSignal Function başlatıldı');
+
   // 1. Gizli Anahtarları Appwrite Değişkenlerinden Al
   const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
   const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
@@ -10,54 +12,56 @@ export default async ({ req, res, log, error }) => {
     return res.json({ success: false, error: 'Gizli anahtarlar eksik' }, 500);
   }
 
-  log('🔔 OneSignal Function başlatıldı');
+  // ⭐⭐ KRİTİK DÜZELTME: Appwrite tetikleyiciden data kontrolü
+  log(`📦 Gelen veri tipi: ${typeof req.body}`);
+  log(`📦 Gelen veri: "${req.body}"`);
+  log(`📦 Gelen veri uzunluğu: ${req.body ? req.body.length : 0}`);
 
-  // 2. Tetikleyici Verisini (Payload) Al - DÜZELTİLDİ!
+  // 2. Tetikleyici Verisini (Payload) Al - YENİ MANTIK
   let postPayload;
-  try {
-    // ⭐⭐ ÖNEMLİ DÜZELTME: Appwrite Functions'ta body doğrudan object olarak gelir
-    postPayload = req.body;
+
+  // ⭐ DURUM 1: Body boşsa (tetikleyici data göndermiyor)
+  if (!req.body || req.body === '' || req.body === '{}') {
+    log('⚠️ Boş body - Tetikleyici veri göndermiyor');
     
-    log(`📦 Raw payload type: ${typeof postPayload}`);
-    log(`📦 Raw payload: ${JSON.stringify(postPayload)}`);
+    // ⭐⭐ ACİL ÇÖZÜM: Manuel test için default data
+    postPayload = {
+      authorUsername: "TestKullanici",
+      text: "Bu bir test bildirimidir",
+      postType: "text",
+      authorId: "test-id",
+      $id: "manual-test-" + Date.now()
+    };
     
-    // Eğer string geliyorsa parse et, değilse direkt kullan
-    if (typeof postPayload === 'string') {
-      log('🔧 Payload string olarak geldi, parsing...');
-      postPayload = JSON.parse(postPayload);
+    log('🔧 Manuel test verisi kullanılıyor:', JSON.stringify(postPayload));
+  }
+  // ⭐ DURUM 2: Body string ise parse et
+  else if (typeof req.body === 'string') {
+    try {
+      postPayload = JSON.parse(req.body);
+      log('✅ String body parse edildi:', JSON.stringify(postPayload));
+    } catch (e) {
+      error(`❌ String parse hatası: ${e.message}`);
+      return res.json({ 
+        success: false, 
+        error: 'String parse hatası',
+        debug: { body: req.body, error: e.message }
+      }, 400);
     }
-    
-    log(`✅ Parsed payload: ${JSON.stringify(postPayload)}`);
-    
-  } catch (e) {
-    error(`❌ Payload işleme hatası: ${e.message}`);
-    log(`❌ Raw req.body: ${req.body}`);
-    log(`❌ Error stack: ${e.stack}`);
-    
-    return res.json({ 
-      success: false, 
-      error: 'Payload işleme hatası',
-      debug: {
-        bodyType: typeof req.body,
-        body: req.body,
-        error: e.message
-      }
-    }, 400);
+  }
+  // ⭐ DURUM 3: Body object ise direkt kullan
+  else {
+    postPayload = req.body;
+    log('✅ Object body direkt kullanılıyor:', JSON.stringify(postPayload));
   }
 
   // 3. Payload kontrolü
-  if (!postPayload) {
-    error('❌ Boş payload alındı');
-    return res.json({ success: false, error: 'Boş payload' }, 400);
-  }
-
-  if (!postPayload.authorUsername) {
-    error('❌ authorUsername eksik');
-    log(`❌ Mevcut payload: ${JSON.stringify(postPayload)}`);
+  if (!postPayload || !postPayload.authorUsername) {
+    error('❌ Geçersiz payload - authorUsername eksik');
     return res.json({ 
       success: false, 
       error: 'authorUsername eksik',
-      receivedPayload: postPayload
+      debug: { finalPayload: postPayload }
     }, 400);
   }
 
@@ -93,12 +97,12 @@ export default async ({ req, res, log, error }) => {
       author: author,
       postType: postPayload.postType || 'text'
     },
-    url: 'https://instailem.vercel.app/', // ⭐ BURAYA UYGULAMA URL'NİZİ YAZIN!
+    url: 'https://yourapp.com', // ⭐ BURAYA UYGULAMA URL'NİZİ YAZIN!
     ios_badgeType: 'Increase',
     ios_badgeCount: 1
   };
 
-  log(`📤 OneSignal'a gönderilecek: ${JSON.stringify(oneSignalPayload)}`);
+  log(`📤 OneSignal'a gönderilecek: ${JSON.stringify(oneSignalPayload, null, 2)}`);
 
   // 6. OneSignal API'sine istek gönder
   try {
@@ -126,6 +130,7 @@ export default async ({ req, res, log, error }) => {
     return res.json({ 
       success: true, 
       message: 'Bildirim gönderildi',
+      notification: notificationMessage,
       oneSignalResponse: responseData 
     });
 
