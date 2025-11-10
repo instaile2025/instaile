@@ -1,7 +1,7 @@
 <template>
   <v-container class="py-6" style="max-width: 500px;">
     
-    <!-- 1. GÜVENLİK KONTROLÜ (Değişmedi) -->
+    <!-- 1. GÜVENLİK KONTROLÜ -->
     <v-alert
       v-if="!authStore.isApproved"
       type="warning"
@@ -16,10 +16,10 @@
       Paylaşım yapabilmek için hesabınızın bir admin tarafından onaylanması gerekmektedir.
     </v-alert>
 
-    <!-- 2. YENİ TASARIM (Resimdeki gibi - DÜZELTİLMİŞ) -->
+    <!-- 2. YENİ TASARIM -->
     <v-card v-else class="pa-4 rounded-lg" elevation="3">
       
-      <!-- Gizli Dosya Girişi (Hâlâ Sizin Mantığınızı Kullanıyor, ama gizli) -->
+      <!-- Gizli Dosya Girişi -->
       <input
         ref="fileInput" 
         type="file"
@@ -28,7 +28,7 @@
         class="d-none"
       />
 
-      <!-- "Fotoğraf Yüklemek için Tıkla" Alanı (Dropzone) -->
+      <!-- "Fotoğraf Yüklemek için Tıkla" Alanı -->
       <v-sheet
         v-if="!preview"
         border="dashed"
@@ -41,8 +41,7 @@
         <div class="text-caption text-grey">(Otomatik optimize edilecek)</div>
       </v-sheet>
 
-      <!-- Önizleme (Sizin Kodunuz) -->
-      <!-- YENİ: Tıklandığında dosyayı SIFIRLAR -->
+      <!-- Önizleme -->
       <v-img
         v-if="preview"
         :src="preview"
@@ -52,7 +51,7 @@
         @click="clearFile"
       />
       
-      <!-- Açıklama Alanı (DÜZELTME: Artık aydınlık tema) -->
+      <!-- Açıklama Alanı -->
       <v-textarea
         v-model="text"
         label="Açıklama yaz..."
@@ -63,20 +62,20 @@
         hide-details
       ></v-textarea>
 
-      <!-- Konum Alanı (İsteğiniz üzerine KALDIRILDI) -->
-      <!-- 
-      <v-text-field
-        v-model="location"
-        label="Konum ekle (opsiyonel)"
-        ...
-      ></v-text-field>
-      -->
+      <!-- Debug Modu Switch -->
+      <v-switch
+        v-model="debugMode"
+        label="Debug Modu (Konsola log yazar)"
+        color="primary"
+        density="compact"
+        class="mb-3"
+      ></v-switch>
 
       <v-alert v-if="error" type="error" class="mb-3" dense>
         {{ error }}
       </v-alert>
 
-      <!-- Butonlar (Yeni Stil) -->
+      <!-- Butonlar -->
       <v-row class="mt-2">
         <v-col>
           <!-- İptal Butonu -->
@@ -91,7 +90,7 @@
           </v-btn>
         </v-col>
         <v-col>
-          <!-- Paylaş Butonu (Degrade Stil) -->
+          <!-- Paylaş Butonu -->
           <v-btn
             block
             :loading="loading"
@@ -105,6 +104,23 @@
         </v-col>
       </v-row>
 
+      <!-- Debug Bilgisi -->
+      <v-alert
+        v-if="debugMode && lastPostData"
+        type="info"
+        variant="tonal"
+        class="mt-4"
+      >
+        <template v-slot:title>
+          Debug Bilgisi
+        </template>
+        <div><strong>Son Gönderi ID:</strong> {{ lastPostData.$id }}</div>
+        <div><strong>Gönderen:</strong> {{ lastPostData.authorUsername }}</div>
+        <div><strong>Metin:</strong> {{ lastPostData.text || 'Boş' }}</div>
+        <div><strong>Tip:</strong> {{ lastPostData.postType }}</div>
+        <div><strong>Tarih:</strong> {{ new Date().toLocaleString('tr-TR') }}</div>
+      </v-alert>
+
     </v-card>
   </v-container>
 </template>
@@ -114,18 +130,19 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router' 
 import { useAuthStore } from '@/stores/auth' 
 import { storage, databases, account } from '@/plugins/appwrite'
-import { ID, Permission, Role, Query } from 'appwrite' 
+import { ID, Permission, Role } from 'appwrite' 
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const text = ref('')
-// const location = ref('') // Konum KALDIRILDI
 const selectedFile = ref(null)
 const preview = ref(null)
 const loading = ref(false)
 const error = ref(null)
 const fileInput = ref(null)
+const debugMode = ref(false) // YENİ: Debug modu
+const lastPostData = ref(null) // YENİ: Son gönderi bilgisi
 
 const triggerFileInput = () => {
   if (fileInput.value) {
@@ -133,7 +150,6 @@ const triggerFileInput = () => {
   }
 }
 
-// YENİ: Sadece dosyayı ve önizlemeyi sıfırlar
 const clearFile = () => {
   selectedFile.value = null
   if (preview.value) {
@@ -144,15 +160,13 @@ const clearFile = () => {
   error.value = null
 }
 
-// "İptal" butonu artık 'clearFile'ı da çağırıyor
 const clearForm = () => {
-  clearFile() // Dosyayı temizle
+  clearFile()
   text.value = ''
-  // location.value = '' // Konum KALDIRILDI
+  lastPostData.value = null // Debug verisini temizle
 }
 
-// === Aşağıdaki kodun tamamı, sizin çalışan kodunuzdur ===
-
+// === DOSYA SEÇİM FONKSİYONU ===
 const onFileSelect = (e) => {
   error.value = null
   const file = e?.target?.files?.[0] || null
@@ -170,6 +184,7 @@ const onFileSelect = (e) => {
       if (img.width && img.height) {
         preview.value = url
         selectedFile.value = file
+        if (debugMode.value) console.log('🖼️ Resim seçildi:', file.name, `${img.width}x${img.height}`)
       } else {
         selectedFile.value = null
         preview.value = null
@@ -188,11 +203,12 @@ const onFileSelect = (e) => {
 
   selectedFile.value = file
   preview.value = null
+  if (debugMode.value) console.log('📁 Dosya seçildi:', file.name, file.type)
 }
 
+// === RESİM KÜÇÜLTME FONKSİYONU ===
 const resizeImage = (file, maxSize = 1200) =>
   new Promise((resolve) => {
-    // ... (Kullanıcının resizeImage kodu - olduğu gibi kalacak) ...
     if (!file || !file.type.startsWith('image')) return resolve(file)
     const url = URL.createObjectURL(file)
     const img = new Image()
@@ -222,6 +238,7 @@ const resizeImage = (file, maxSize = 1200) =>
         URL.revokeObjectURL(url)
         if (!blob) return resolve(file)
         const newFile = new File([blob], file.name, { type: file.type })
+        if (debugMode.value) console.log('📐 Resim optimize edildi:', `${width}x${height}`)
         resolve(newFile)
       }, file.type, 0.85)
     }
@@ -231,6 +248,7 @@ const resizeImage = (file, maxSize = 1200) =>
     }
   })
 
+// === PAYLAŞIM FONKSİYONU (GÜNCELLENDİ) ===
 const sharePost = async () => {
   error.value = null
   loading.value = true
@@ -256,7 +274,10 @@ const sharePost = async () => {
       Permission.update(Role.users())
     ]
 
+    // DOSYA YÜKLEME
     if (selectedFile.value) { 
+      if (debugMode.value) console.log('⬆️ Dosya yükleniyor...', selectedFile.value.name)
+      
       const uploadFile = selectedFile.value.type.startsWith('image')
         ? await resizeImage(selectedFile.value)
         : selectedFile.value
@@ -276,6 +297,8 @@ const sharePost = async () => {
       if (uploadFile.type.startsWith('image')) postType = 'image'
       else if (uploadFile.type.startsWith('video')) postType = 'video'
       else if (uploadFile.type.startsWith('audio')) postType = 'audio'
+
+      if (debugMode.value) console.log('✅ Dosya yüklendi:', uploaded.$id, postType)
     }
 
     const docPermissions = [
@@ -284,6 +307,7 @@ const sharePost = async () => {
       Permission.delete(Role.users())
     ]
     
+    // GÖNDERİ VERİSİ
     const postData = {
       authorId: user.$id,
       authorUsername: userDetails.username || 'Anonim',
@@ -300,7 +324,13 @@ const sharePost = async () => {
       throw new Error("Paylaşmak için metin veya dosya girmelisiniz.")
     }
 
-    await databases.createDocument(
+    if (debugMode.value) {
+      console.log('📝 Gönderi verisi hazır:', postData)
+      console.log('🚀 Appwrite Function tetiklenecek...')
+    }
+
+    // GÖNDERİYİ OLUŞTUR
+    const created = await databases.createDocument(
       'main',
       'posts',
       ID.unique(),
@@ -308,12 +338,30 @@ const sharePost = async () => {
       docPermissions
     )
 
-    clearForm() // Formu temizle
+    console.log('✅ GÖNDERİ OLUŞTURULDU - Appwrite Function TETİKLENMELİ!')
+    console.log('📦 Gönderi ID:', created.$id)
+    console.log('👤 Gönderen:', created.authorUsername)
+    console.log('📝 Metin:', created.text || 'Boş')
+    console.log('🎨 Tip:', created.postType)
+
+    // Debug için son gönderi bilgisini kaydet
+    lastPostData.value = created
+
+    // BAŞARI MESAJI
+    if (debugMode.value) {
+      alert(`✅ Gönderi paylaşıldı!\n\nAppwrite Function tetiklendi.\nKonsolu kontrol edin.`)
+    }
+
+    clearForm()
     loading.value = false 
-    router.push('/') // Yönlendir
+    
+    // 2 saniye bekle ve ana sayfaya yönlendir
+    setTimeout(() => {
+      router.push('/')
+    }, 2000)
 
   } catch (err) {
-    console.error('sharePost error', err)
+    console.error('❌ sharePost hatası:', err)
     error.value = err?.message || String(err)
     alert('Hata: ' + (err?.message || String(err)))
     loading.value = false 
@@ -322,20 +370,16 @@ const sharePost = async () => {
 </script>
 
 <style scoped>
-/* YENİ: Dropzone stili */
 .dropzone {
   cursor: pointer;
   transition: background-color 0.2s ease-in-out;
 }
 .dropzone:hover {
-  background-color: #f0f0f0; /* Aydınlık tema için hafif hover */
+  background-color: #f0f0f0;
 }
 
-/* YENİ: Resimdeki degrade (gradient) buton */
 .gradient-button {
   background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
-  color: white !important; /* Vuetify'ı ezmek için */
+  color: white !important;
 }
-
-/* Koyu (dark) text field'lar için stiller KALDIRILDI */
 </style>
