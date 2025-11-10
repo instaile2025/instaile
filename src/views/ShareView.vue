@@ -13,7 +13,7 @@
         class="mb-4"
       ></v-textarea>
 
-      <!-- Sizin native input'unuz (Bu harika çalışıyor) -->
+      <!-- native input (Sizin çözümünüz) -->
       <input
         ref="fileInput" 
         type="file"
@@ -22,7 +22,7 @@
         class="mb-4"
       />
 
-      <!-- Sizin Önizlemeniz -->
+      <!-- Önizleme -->
       <v-img
         v-if="preview"
         :src="preview"
@@ -51,13 +51,11 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router' 
-// YENİ: Pinia Store'u import ediyoruz (Kullanıcı bilgisi için)
 import { useAuthStore } from '@/stores/auth' 
 import { storage, databases, account } from '@/plugins/appwrite'
-import { ID, Permission, Role, Query } from 'appwrite' 
+import { ID, Permission, Role, Query } in 'appwrite' 
 
 const router = useRouter()
-// YENİ: Pinia Store'u çağırıyoruz
 const authStore = useAuthStore()
 
 const text = ref('')
@@ -153,32 +151,41 @@ const sharePost = async () => {
   loading.value = true
 
   try {
-    // DÜZELTME: Kullanıcıyı 'account.get()' yerine Pinia'dan alıyoruz (daha hızlı)
+    if (!authStore.isApproved) {
+      throw new Error("Paylaşım yapmak için onaylı olmalısınız.")
+    }
+    
     const user = authStore.authUser
     const userDetails = authStore.userDetails
 
-    // (Eğer store boşsa, güvenlik için tekrar çek - nadir durum)
-    if (!user || !userDetails) {
-      throw new Error("Kullanıcı oturumu bulunamadı. Lütfen tekrar giriş yapın.")
-    }
-
     let postType = 'text'
     let mediaUrl = '' 
+
+    // === GÜVENLİK DÜZELTMESİ (ADMİN SİLMESİ İÇİN) ===
+    // 'posts' (Depolama) Kovamıza eklediğimiz izinlerin aynısını,
+    // (Role.any() -> Read, Role.users() -> Create)
+    // dosyaya da (createFile) eklememiz gerekiyor.
+    const filePermissions = [
+      Permission.read(Role.any()), // Herkes okuyabilir
+      Permission.delete(Role.users()), // YENİ: Giriş yapmış herkes silebilir
+      Permission.update(Role.users())  // YENİ: Giriş yapmış herkes güncelleyebilir
+    ]
 
     if (selectedFile.value) { 
       const uploadFile = selectedFile.value.type.startsWith('image')
         ? await resizeImage(selectedFile.value)
         : selectedFile.value
 
-      const filePermissions = [Permission.read(Role.any())]
       const bucketId = 'posts' 
 
       const uploaded = await storage.createFile(
         bucketId,
         ID.unique(),
         uploadFile,
-        filePermissions
+        filePermissions // <-- DÜZELTME: İzinleri buraya da ekledik
       )
+
+      console.log('Uploaded file object:', uploaded)
 
       const fv = storage.getFileDownload(bucketId, uploaded.$id)
       mediaUrl = fv?.href || fv || '' 
@@ -188,26 +195,41 @@ const sharePost = async () => {
       else if (uploadFile.type.startsWith('audio')) postType = 'audio'
     }
 
-    // === NİHAİ DÜZELTME (EKSİK ALANLAR EKLENDİ) ===
+    // === GÜVENLİK DÜZELTMESİ (ADMİN SİLMESİ İÇİN) ===
+    // 'Posts' (Veritabanı) koleksiyonumuza eklediğimiz izinlerin aynısını,
+    // (Role.any() -> Create, Role.users() -> Read/Update/Delete)
+    // belgeye de (createDocument) eklememiz gerekiyor.
+    const docPermissions = [
+      Permission.read(Role.any()),    // Herkes (Any) okuyabilir
+      Permission.update(Role.users()),// Giriş yapmış (Users) güncelleyebilir (Admin 'edit' için)
+      Permission.delete(Role.users()) // Giriş yapmış (Users) silebilir (Admin 'delete' için)
+    ]
+    
     const postData = {
       authorId: user.$id,
       authorUsername: userDetails.username || 'Anonim',
-      // (BÖLÜM 12'deki 'authorAvatarUrl' eklendi)
       authorAvatarUrl: userDetails.profilePicUrl || '', 
       text: text.value.trim(),
       postType,
       mediaUrl,
-      // (BÖLÜM 11'deki 'likes' alanları eklendi)
-      likes: [],
+      likes: [], 
       likeUsernames: [],
-      likesCount: 0
+      likesCount: 0 
     }
-
+    
     if (!postData.text && !postData.mediaUrl) {
       throw new Error("Paylaşmak için metin veya dosya girmelisiniz.")
     }
 
-    await databases.createDocument('main', 'posts', ID.unique(), postData)
+    const created = await databases.createDocument(
+      'main',
+      'posts',
+      ID.unique(),
+      postData,
+      docPermissions // <-- DÜZELTME: İzinleri buraya ekledik
+    )
+
+    console.log('Created post:', created)
 
     // temizle
     text.value = ''
@@ -228,4 +250,4 @@ const sharePost = async () => {
     loading.value = false 
   } 
 }
-</script> 
+</script>
