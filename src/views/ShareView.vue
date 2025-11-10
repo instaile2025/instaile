@@ -251,25 +251,31 @@ const resizeImage = (file, maxSize = 1200) =>
     }
   })
 
-// === BİLDİRİM FONKSİYONU - MANUEL ÇAĞRI ===
+// === BİLDİRİM FONKSİYONU - CORS ÇÖZÜMLÜ ===
 const triggerNotification = async (postData) => {
   try {
     notificationStatus.value = 'Gönderiliyor...'
     console.log('🚀 Bildirim fonksiyonu manuel çağrılıyor...')
-    console.log('📦 Gönderilen veri:', postData) // ⭐ BU SATIRI EKLEDİM
+    console.log('📦 Gönderilen veri:', postData)
     
     // Appwrite Function URL'si
     const functionUrl = 'https://690df0c900255ed6f16a.fra.appwrite.run'
     
-    // ⭐ HEADERS'A USER-AGENT EKLEYİN (CORS için)
+    // CORS hatası için farklı yaklaşım
     const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'Instaile-App/1.0'
+        'User-Agent': 'Instaile-App/1.0',
+        'Accept': 'application/json',
       },
+      mode: 'cors', // cors modunu açıkça belirt
       body: JSON.stringify(postData)
     })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
     
     const result = await response.json()
     console.log('📨 Bildirim fonksiyonu yanıtı:', result)
@@ -293,10 +299,24 @@ const triggerNotification = async (postData) => {
   } catch (notifError) {
     notificationStatus.value = '❌ Bağlantı Hatası!'
     console.error('❌ Bildirim tetikleme hatası:', notifError)
-    if (debugMode.value) {
-      alert(`Bildirim bağlantı hatası: ${notifError.message}`)
+    
+    // CORS hatasını özel olarak ele al
+    if (notifError.message.includes('CORS') || notifError.message.includes('Failed to fetch')) {
+      console.warn('🌐 CORS Hatası - Appwrite Function CORS headers gerektiriyor')
+      if (debugMode.value) {
+        alert(`CORS Hatası: Appwrite Function'ınız CORS headers eklemeniz gerekiyor.\n\nGeçici olarak bildirim gönderilemedi ama gönderiniz başarıyla paylaşıldı.`)
+      }
+    } else {
+      if (debugMode.value) {
+        alert(`Bildirim bağlantı hatası: ${notifError.message}`)
+      }
     }
-    return { success: false, error: notifError.message }
+    
+    return { 
+      success: false, 
+      error: notifError.message,
+      isCorsError: notifError.message.includes('CORS') || notifError.message.includes('Failed to fetch')
+    }
   }
 }
 
@@ -409,11 +429,15 @@ const sharePost = async () => {
       console.log('📊 Bildirim sonucu:', notificationResult)
     }
 
-    // BAŞARI MESAJI
-    if (debugMode.value && notificationResult.success) {
-      alert(`✅ Gönderi paylaşıldı!\n\nBildirim başarıyla gönderildi:\n"${notificationResult.notification}"`)
-    } else if (debugMode.value && !notificationResult.success) {
-      alert(`✅ Gönderi paylaşıldı!\n\nBildirim gönderilemedi ama paylaşım başarılı.`)
+    // BAŞARI MESAJI - CORS hatası durumunda farklı mesaj
+    if (debugMode.value) {
+      if (notificationResult.success) {
+        alert(`✅ Gönderi paylaşıldı!\n\nBildirim başarıyla gönderildi:\n"${notificationResult.notification}"`)
+      } else if (notificationResult.isCorsError) {
+        alert(`✅ Gönderi paylaşıldı!\n\n⚠️ CORS Hatası: Appwrite Function CORS headers gerektiriyor.\nGönderiniz başarıyla paylaşıldı ama bildirim gönderilemedi.`)
+      } else {
+        alert(`✅ Gönderi paylaşıldı!\n\nBildirim gönderilemedi ama paylaşım başarılı.`)
+      }
     }
 
     clearForm()

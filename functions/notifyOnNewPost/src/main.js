@@ -1,3 +1,13 @@
+// Function'ın EN BAŞINA ekleyin:
+res.setHeader('Access-Control-Allow-Origin', '*');
+res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, User-Agent');
+
+// OPTIONS isteği için
+if (req.method === 'OPTIONS') {
+  return res.json({ success: true });
+}
+
 /* Appwrite Function: Bildirim - PAYLOAD DÜZELTME */
 export default async ({ req, res, log, error }) => {
   
