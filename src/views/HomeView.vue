@@ -26,7 +26,7 @@
               <span class="text-grey text-caption"> · {{ formatTime(post.$createdAt) }}</span>
             </div>
 
-            <!-- DÜZELTİLMİŞ: Admin kontrolleri -->
+            <!-- DÜZELTİLMİŞ: Admin ve kullanıcı kontrolleri -->
             <div v-if="isAdmin || post.authorId === currentUser?.$id" class="ml-auto d-flex">
               <v-btn v-if="post.authorId === currentUser?.$id" icon size="small" @click="editPost(post)">
                 <v-icon size="small">mdi-pencil</v-icon>
@@ -213,7 +213,7 @@ const mapCommentDocument = (doc) => {
   return { ...doc }
 }
 
-// DÜZELTİLMİŞ: Silme fonksiyonu
+// DÜZELTİLMİŞ: Silme fonksiyonu - hem admin hem kullanıcı için
 const deletePost = async (post) => {
   if (!confirm("Bu gönderiyi kalıcı olarak silmek istediğine emin misin?")) return
   
@@ -259,6 +259,7 @@ const deletePost = async (post) => {
   }
 }
 
+// DÜZELTİLMİŞ: Düzenleme fonksiyonu - sadece kendi gönderileri için
 const editPost = async (post) => {
   // Sadece kendi gönderilerini düzenleyebilsin
   if (post.authorId !== currentUser?.$id) {
@@ -290,10 +291,6 @@ const subscribeToContent = async () => {
     if (currentUser) {
       await checkAdminStatus()
     }
-    
-    // (Pinia store'u zaten BÖLÜM 7'de yüklendi,
-    // bu yüzden 'isAdmin' değeri 'authStore.isAdmin'den
-    // doğru bir şekilde alınmış olmalı.)
     
     // 1. Tüm Gönderileri Yükle
     const postsRes = await databases.listDocuments('main', 'posts', [

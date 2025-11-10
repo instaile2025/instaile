@@ -169,13 +169,13 @@ const sharePost = async () => {
     let postType = 'text'
     let mediaUrl = '' 
 
-    // DÜZELTİLMİŞ: Daha güvenli izin yapısı
+    // DÜZELTİLMİŞ: Hem kullanıcı hem de admin için izin yapısı
     const filePermissions = [
       Permission.read(Role.any()), // Herkes okuyabilir
       Permission.delete(Role.user(user.$id)), // Sadece yazar silebilir
       Permission.update(Role.user(user.$id)), // Sadece yazar güncelleyebilir
-      Permission.delete(Role.team('admins')), // Adminler silebilir
-      Permission.update(Role.team('admins'))  // Adminler güncelleyebilir
+      Permission.delete(Role.team('admins')), // Adminler silebilir (TEAM OLMALI)
+      Permission.update(Role.team('admins'))  // Adminler güncelleyebilir (TEAM OLMALI)
     ]
 
     if (selectedFile.value) { 
@@ -189,7 +189,7 @@ const sharePost = async () => {
         bucketId,
         ID.unique(),
         uploadFile,
-        filePermissions // DÜZELTİLMİŞ: Güvenli izinler
+        filePermissions // DÜZELTİLMİŞ: Tam izinler
       )
 
       console.log('Uploaded file object:', uploaded)
@@ -202,13 +202,13 @@ const sharePost = async () => {
       else if (uploadFile.type.startsWith('audio')) postType = 'audio'
     }
 
-    // DÜZELTİLMİŞ: Daha güvenli izin yapısı
+    // DÜZELTİLMİŞ: Hem kullanıcı hem de admin için izin yapısı
     const docPermissions = [
       Permission.read(Role.any()),    // Herkes okuyabilir
       Permission.update(Role.user(user.$id)), // Sadece yazar güncelleyebilir
       Permission.delete(Role.user(user.$id)), // Sadece yazar silebilir
-      Permission.update(Role.team('admins')), // Adminler güncelleyebilir
-      Permission.delete(Role.team('admins'))  // Adminler silebilir
+      Permission.update(Role.team('admins')), // Adminler güncelleyebilir (TEAM OLMALI)
+      Permission.delete(Role.team('admins'))  // Adminler silebilir (TEAM OLMALI)
     ]
     
     const postData = {
@@ -233,7 +233,7 @@ const sharePost = async () => {
       'posts',
       ID.unique(),
       postData,
-      docPermissions // DÜZELTİLMİŞ: Güvenli izinler
+      docPermissions // DÜZELTİLMİŞ: Tam izinler
     )
 
     console.log('Created post:', created)
