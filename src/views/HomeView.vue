@@ -26,10 +26,9 @@
               <span class="text-grey text-caption"> · {{ formatTime(post.$createdAt) }}</span>
             </div>
 
-            <!-- === YENİ: ADMİN KONTROLLERİ (Sizin Fikriniz) === -->
-            <!-- DÜZELTME: v-if="isAdmin.value" yerine v-if="isAdmin" (Template içinde .value gerekmez) -->
-            <div v-if="isAdmin" class="ml-auto d-flex">
-              <v-btn icon size="small" @click="editPost(post)">
+            <!-- DÜZELTİLMİŞ: Admin kontrolleri -->
+            <div v-if="isAdmin || post.authorId === currentUser?.$id" class="ml-auto d-flex">
+              <v-btn v-if="post.authorId === currentUser?.$id" icon size="small" @click="editPost(post)">
                 <v-icon size="small">mdi-pencil</v-icon>
               </v-btn>
               <v-btn icon size="small" color="red-darken-1" @click="deletePost(post)">
@@ -168,8 +167,8 @@ let unsubscribeComments = null
 
 // YENİ: Pinia Store'u çağır
 const authStore = useAuthStore() 
-// YENİ: Admin durumunu store'dan al (Sizin yavaş 'getDocument' kodunuz yerine)
-const isAdmin = ref(authStore.isAdmin) 
+// DÜZELTİLMİŞ: Admin durumunu hem store'dan hem de gerçek zamanlı kontrol edeceğiz
+const isAdmin = ref(false)
 
 const poppingHeartRefs = ref([])
 const setPoppingHeartRef = (el, index) => {
@@ -179,6 +178,24 @@ const setPoppingHeartRef = (el, index) => {
 }
 
 const newCommentText = ref({})
+
+// YENİ: Admin kontrol fonksiyonu
+const checkAdminStatus = async () => {
+  try {
+    if (!currentUser) return
+    
+    const userDetails = await databases.getDocument(
+      'main', 
+      'users', 
+      currentUser.$id
+    )
+    isAdmin.value = userDetails.isAdmin === true
+    console.log('Admin durumu:', isAdmin.value, 'Kullanıcı ID:', currentUser.$id)
+  } catch (error) {
+    console.error('Admin kontrol hatası:', error)
+    isAdmin.value = false
+  }
+}
 
 // Gelen 'post' belgesini işler (map eder)
 const mapPostDocument = (doc, user) => {
@@ -196,15 +213,21 @@ const mapCommentDocument = (doc) => {
   return { ...doc }
 }
 
-// === YENİ: ADMİN FONKSİYONLARI (Sizin Kodunuz - Ufak Düzeltmelerle) ===
+// DÜZELTİLMİŞ: Silme fonksiyonu
 const deletePost = async (post) => {
-  // UYARI: 'confirm' tarayıcıda çalışır ama PWA'da
-  // (veya GitHub Codespace'te) sorun çıkarabilir.
-  // Şimdilik 'confirm' kullanıyoruz, ilerde bunu
-  // güzel bir Vuetify <v-dialog> (modal) ile değiştirmek daha iyi olur.
   if (!confirm("Bu gönderiyi kalıcı olarak silmek istediğine emin misin?")) return
   
   try {
+    // Önce kullanıcının bu gönderiyi silmeye yetkisi olup olmadığını kontrol et
+    const canDelete = isAdmin.value || post.authorId === currentUser?.$id
+    
+    if (!canDelete) {
+      alert('Bu gönderiyi silme yetkiniz yok!')
+      return
+    }
+    
+    console.log('Silme yetkisi var. Gönderi siliniyor...', post.$id)
+    
     // 1. Veritabanından belgeyi (document) sil
     await databases.deleteDocument("main", "posts", post.$id)
     console.log('Veritabanı belgesi silindi:', post.$id)
@@ -227,12 +250,22 @@ const deletePost = async (post) => {
     
   } catch (err) {
     console.error("Gönderi silme hatası:", err)
-    alert("Hata (Silme): " + err.message)
+    
+    if (err.code === 401) {
+      alert('Bu işlem için yetkiniz yok! Lütfen admin ile iletişime geçin.')
+    } else {
+      alert("Hata (Silme): " + err.message)
+    }
   }
 }
 
 const editPost = async (post) => {
-  // UYARI: 'prompt' da 'confirm' gibi sorunlu olabilir.
+  // Sadece kendi gönderilerini düzenleyebilsin
+  if (post.authorId !== currentUser?.$id) {
+    alert('Sadece kendi gönderilerinizi düzenleyebilirsiniz!')
+    return
+  }
+  
   const newText = prompt("Yeni metni girin:", post.text)
   
   // Eğer kullanıcı 'Cancel' (İptal) demezse
@@ -250,77 +283,86 @@ const editPost = async (post) => {
 
 // Ana Yükleme ve Realtime
 const subscribeToContent = async () => {
-  currentUser = await account.get().catch(() => null)
-  
-  // (Pinia store'u zaten BÖLÜM 7'de yüklendi,
-  // bu yüzden 'isAdmin' değeri 'authStore.isAdmin'den
-  // doğru bir şekilde alınmış olmalı.)
-  
-  // 1. Tüm Gönderileri Yükle
-  const postsRes = await databases.listDocuments('main', 'posts', [
-    Query.orderDesc('$createdAt')
-  ])
-  
-  // 2. Tüm Yorumları Yükle
-  const commentsRes = await databases.listDocuments('main', 'comments', [
-    Query.orderAsc('$createdAt')
-  ])
-  const allComments = commentsRes.documents.map(mapCommentDocument)
+  try {
+    currentUser = await account.get().catch(() => null)
+    
+    // DÜZELTİLMİŞ: Admin kontrolünü yap
+    if (currentUser) {
+      await checkAdminStatus()
+    }
+    
+    // (Pinia store'u zaten BÖLÜM 7'de yüklendi,
+    // bu yüzden 'isAdmin' değeri 'authStore.isAdmin'den
+    // doğru bir şekilde alınmış olmalı.)
+    
+    // 1. Tüm Gönderileri Yükle
+    const postsRes = await databases.listDocuments('main', 'posts', [
+      Query.orderDesc('$createdAt')
+    ])
+    
+    // 2. Tüm Yorumları Yükle
+    const commentsRes = await databases.listDocuments('main', 'comments', [
+      Query.orderAsc('$createdAt')
+    ])
+    const allComments = commentsRes.documents.map(mapCommentDocument)
 
-  // 3. Gönderileri ve Yorumları Birleştir
-  posts.value = postsRes.documents.map(doc => {
-    const mappedPost = mapPostDocument(doc, currentUser)
-    mappedPost.comments = allComments.filter(comment => comment.postId === doc.$id)
-    return mappedPost
-  })
-  console.log('İlk gönderiler ve yorumlar yüklendi.')
+    // 3. Gönderileri ve Yorumları Birleştir
+    posts.value = postsRes.documents.map(doc => {
+      const mappedPost = mapPostDocument(doc, currentUser)
+      mappedPost.comments = allComments.filter(comment => comment.postId === doc.$id)
+      return mappedPost
+    })
+    console.log('İlk gönderiler ve yorumlar yüklendi.')
 
-  // 4. Gönderilere Abone Ol (Realtime)
-  const dbId = 'main'
-  
-  unsubscribePosts = client.subscribe(
-    `databases.${dbId}.collections.posts.documents`, 
-    (response) => {
-      console.log('Realtime POST olayı geldi:', response.events[0])
-      
-      const event = response.events[0]
-      const doc = response.payload
-      const updatedPost = mapPostDocument(doc, currentUser)
-      
-      if (event.includes('create')) {
-        updatedPost.comments = []
-        posts.value.unshift(updatedPost)
-      }
-      else if (event.includes('update')) {
-        const index = posts.value.findIndex(p => p.$id === updatedPost.$id)
-        if (index !== -1) {
-          updatedPost.comments = posts.value[index].comments
-          posts.value[index] = updatedPost
+    // 4. Gönderilere Abone Ol (Realtime)
+    const dbId = 'main'
+    
+    unsubscribePosts = client.subscribe(
+      `databases.${dbId}.collections.posts.documents`, 
+      (response) => {
+        console.log('Realtime POST olayı geldi:', response.events[0])
+        
+        const event = response.events[0]
+        const doc = response.payload
+        const updatedPost = mapPostDocument(doc, currentUser)
+        
+        if (event.includes('create')) {
+          updatedPost.comments = []
+          posts.value.unshift(updatedPost)
+        }
+        else if (event.includes('update')) {
+          const index = posts.value.findIndex(p => p.$id === updatedPost.$id)
+          if (index !== -1) {
+            updatedPost.comments = posts.value[index].comments
+            posts.value[index] = updatedPost
+          }
+        }
+        else if (event.includes('delete')) {
+          posts.value = posts.value.filter(p => p.$id !== updatedPost.$id)
         }
       }
-      else if (event.includes('delete')) {
-        posts.value = posts.value.filter(p => p.$id !== updatedPost.$id)
-      }
-    }
-  )
-  
-  // 5. Yorumlara Abone Ol (Realtime)
-  unsubscribeComments = client.subscribe(
-    `databases.${dbId}.collections.comments.documents`,
-    (response) => {
-      console.log('Realtime COMMENT olayı geldi:', response.events[0])
-      
-      if (response.events[0].includes('create')) {
-        const newComment = mapCommentDocument(response.payload)
-        const post = posts.value.find(p => p.$id === newComment.postId)
-        if (post) {
-          post.comments.push(newComment)
+    )
+    
+    // 5. Yorumlara Abone Ol (Realtime)
+    unsubscribeComments = client.subscribe(
+      `databases.${dbId}.collections.comments.documents`,
+      (response) => {
+        console.log('Realtime COMMENT olayı geldi:', response.events[0])
+        
+        if (response.events[0].includes('create')) {
+          const newComment = mapCommentDocument(response.payload)
+          const post = posts.value.find(p => p.$id === newComment.postId)
+          if (post) {
+            post.comments.push(newComment)
+          }
         }
       }
-    }
-  )
-  
-  console.log('Realtime abonelikleri başlatıldı.')
+    )
+    
+    console.log('Realtime abonelikleri başlatıldı.')
+  } catch (error) {
+    console.error('İçerik yükleme hatası:', error)
+  }
 }
 
 // Yorum Gönderme
@@ -474,4 +516,4 @@ onUnmounted(() => {
 .v-card-text .v-text-field {
   padding-top: 4px;
 }
-</style> 
+</style>
