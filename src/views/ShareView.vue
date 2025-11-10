@@ -1,66 +1,231 @@
 <template>
-  <v-container class="py-6" style="max-width: 600px;">
-    <v-card class="pa-4 rounded-lg" elevation="3">
-
-      <v-card-title class="text-h6">Yeni Gönderi</v-card-title>
-
-      <v-textarea
-        v-model="text"
-        label="Bir şeyler paylaş..."
-        rows="4"
-        auto-grow
-        variant="outlined"
-        class="mb-4"
-      ></v-textarea>
-
-      <!-- native input (Sizin çözümünüz) -->
-      <input
-        ref="fileInput" 
-        type="file"
-        accept="image/*,video/*,audio/*"
-        @change="onFileSelect"
-        class="mb-4"
-      />
-
-      <!-- Önizleme -->
-      <v-img
-        v-if="preview"
-        :src="preview"
-        class="rounded-lg mb-3"
-        height="260"
-        style="object-fit: contain; background:#111;"
-      />
-
-      <v-alert v-if="error" type="error" class="mb-3" dense>
-        {{ error }}
-      </v-alert>
-
-      <v-btn
-        color="primary"
-        block
-        :loading="loading"
+  <v-container class="py-0 px-0" fluid style="height: 100vh; max-width: 600px; margin: 0 auto;">
+    <!-- Üst Bar -->
+    <v-app-bar flat color="transparent" class="px-2">
+      <v-btn icon @click="goBack" class="mr-2">
+        <v-icon>mdi-close</v-icon>
+      </v-btn>
+      <v-toolbar-title class="text-h6 font-weight-bold">Yeni Gönderi</v-toolbar-title>
+      <v-spacer></v-spacer>
+      <v-btn 
+        color="primary" 
+        variant="text" 
         @click="sharePost"
-        rounded="lg"
+        :loading="loading"
+        :disabled="!canShare"
+        class="text-capitalize"
       >
         Paylaş
       </v-btn>
+    </v-app-bar>
+
+    <v-divider></v-divider>
+
+    <!-- Ana İçerik -->
+    <v-card flat class="mx-2 mt-2" style="border-radius: 12px;">
+      
+      <!-- Fotoğraf Yükleme Alanı -->
+      <div 
+        v-if="!selectedFile"
+        class="photo-upload-area pa-8 text-center"
+        @click="triggerFileInput"
+        style="
+          border: 2px dashed #ddd;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          min-height: 400px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+          align-items: center;
+        "
+        @mouseover="uploadAreaHover = true"
+        @mouseleave="uploadAreaHover = false"
+        :style="{
+          'border-color': uploadAreaHover ? '#1976d2' : '#ddd',
+          'background-color': uploadAreaHover ? '#f8fbff' : '#fafafa'
+        }"
+      >
+        <v-icon 
+          size="64" 
+          :color="uploadAreaHover ? 'primary' : 'grey'"
+          class="mb-4"
+        >
+          mdi-image-plus
+        </v-icon>
+        <div class="text-h6 font-weight-medium mb-2" :class="uploadAreaHover ? 'text-primary' : 'text-grey'">
+          Fotoğraf yüklemek için tıkla
+        </div>
+        <div class="text-body-2 text-grey">
+          (Otomatik optimize edilecek)
+        </div>
+      </div>
+
+      <!-- Gizli File Input -->
+      <input
+        ref="fileInput"
+        type="file"
+        accept="image/*,video/*,audio/*"
+        @change="onFileSelect"
+        style="display: none"
+      />
+
+      <!-- Fotoğraf Önizleme -->
+      <div v-if="selectedFile && preview" class="photo-preview-container">
+        <v-img
+          :src="preview"
+          class="preview-image"
+          style="
+            width: 100%;
+            max-height: 60vh;
+            object-fit: contain;
+            background: #f5f5f5;
+          "
+        ></v-img>
+      </div>
+
+      <!-- Video/Audio Önizleme -->
+      <div v-if="selectedFile && !preview" class="pa-4 text-center">
+        <v-icon size="64" color="primary" class="mb-2">
+          {{ selectedFile.type.startsWith('video') ? 'mdi-video' : 'mdi-music' }}
+        </v-icon>
+        <div class="text-h6">{{ selectedFile.name }}</div>
+        <div class="text-body-2 text-grey">
+          {{ selectedFile.type.startsWith('video') ? 'Video dosyası' : 'Ses dosyası' }}
+        </div>
+      </div>
+
+      <!-- Açıklama ve Detaylar -->
+      <div v-if="selectedFile" class="pa-4">
+        
+        <!-- Kullanıcı Bilgisi -->
+        <div class="d-flex align-center mb-4">
+          <v-avatar size="32" class="mr-3">
+            <v-img
+              v-if="authStore.userDetails?.profilePicUrl"
+              :src="authStore.userDetails.profilePicUrl"
+              cover
+            ></v-img>
+            <v-avatar v-else color="primary">
+              <span class="text-white text-caption">
+                {{ (authStore.userDetails?.username || 'U').charAt(0).toUpperCase() }}
+              </span>
+            </v-avatar>
+          </v-avatar>
+          <span class="font-weight-bold">{{ authStore.userDetails?.username || 'Kullanıcı' }}</span>
+        </div>
+
+        <!-- Açıklama Textarea -->
+        <v-textarea
+          v-model="text"
+          variant="outlined"
+          rows="3"
+          auto-grow
+          placeholder="Açıklama yaz..."
+          hide-details
+          class="mb-4"
+          style="font-size: 14px;"
+        ></v-textarea>
+
+        <!-- Konum Ekleme -->
+        <v-text-field
+          v-model="location"
+          variant="outlined"
+          placeholder="Konum ekle (opsiyonel)"
+          prepend-inner-icon="mdi-map-marker-outline"
+          hide-details
+          class="mb-4"
+          style="font-size: 14px;"
+        ></v-text-field>
+
+      </div>
+
+      <!-- Sadece Metin Paylaşımı -->
+      <div v-if="!selectedFile && text" class="pa-4">
+        <!-- Kullanıcı Bilgisi -->
+        <div class="d-flex align-center mb-4">
+          <v-avatar size="32" class="mr-3">
+            <v-img
+              v-if="authStore.userDetails?.profilePicUrl"
+              :src="authStore.userDetails.profilePicUrl"
+              cover
+            ></v-img>
+            <v-avatar v-else color="primary">
+              <span class="text-white text-caption">
+                {{ (authStore.userDetails?.username || 'U').charAt(0).toUpperCase() }}
+              </span>
+            </v-avatar>
+          </v-avatar>
+          <span class="font-weight-bold">{{ authStore.userDetails?.username || 'Kullanıcı' }}</span>
+        </div>
+
+        <!-- Açıklama Textarea -->
+        <v-textarea
+          v-model="text"
+          variant="outlined"
+          rows="3"
+          auto-grow
+          placeholder="Bir şeyler paylaş..."
+          hide-details
+          class="mb-4"
+          style="font-size: 14px;"
+        ></v-textarea>
+      </div>
+
     </v-card>
+
+    <!-- Hata Mesajı -->
+    <v-alert
+      v-if="error"
+      type="error"
+      density="compact"
+      class="mx-2 mt-2"
+      style="border-radius: 8px;"
+    >
+      {{ error }}
+    </v-alert>
+
+    <!-- Alt Bar (Sadece dosya seçildiğinde) -->
+    <v-bottom-navigation v-if="selectedFile" grow color="primary" class="px-2 py-3">
+      <v-btn value="edit" @click="triggerFileInput" variant="text">
+        <v-icon>mdi-pencil</v-icon>
+        <span>Değiştir</span>
+      </v-btn>
+    </v-bottom-navigation>
+
+    <!-- Yükleme Overlay -->
+    <v-overlay
+      :model-value="loading"
+      class="align-center justify-center"
+      persistent
+    >
+      <v-card class="pa-4 text-center" style="border-radius: 12px;">
+        <v-progress-circular
+          indeterminate
+          color="primary"
+          size="64"
+          class="mb-4"
+        ></v-progress-circular>
+        <div class="text-h6">Paylaşılıyor...</div>
+        <div class="text-body-2 text-grey mt-2">Gönderiniz paylaşılıyor, lütfen bekleyin.</div>
+      </v-card>
+    </v-overlay>
+
   </v-container>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router' 
-// YENİ: Pinia Store'u import ediyoruz (Kullanıcı bilgisi için)
 import { useAuthStore } from '@/stores/auth' 
 import { storage, databases, account } from '@/plugins/appwrite'
-// YENİ: 'Query' eklendi (import listesine)
-import { ID, Permission, Role, Query } from 'appwrite' 
+import { ID, Permission, Role } from 'appwrite' 
 
 const router = useRouter()
-// YENİ: Pinia Store'u çağırıyoruz
 const authStore = useAuthStore()
 
+// State - Mevcut kodunuzdaki değişkenler
 const text = ref('')
 const selectedFile = ref(null)
 const preview = ref(null)
@@ -68,7 +233,25 @@ const loading = ref(false)
 const error = ref(null)
 const fileInput = ref(null)
 
-// Sizin onFileSelect fonksiyonunuz (harika)
+// Yeni state'ler
+const location = ref('')
+const uploadAreaHover = ref(false)
+
+// Computed
+const canShare = computed(() => {
+  return selectedFile.value !== null || text.value.trim() !== ''
+})
+
+// Methods
+const goBack = () => {
+  router.back()
+}
+
+const triggerFileInput = () => {
+  fileInput.value?.click()
+}
+
+// MEVCUT KODUNUZ - Aynen korundu
 const onFileSelect = (e) => {
   error.value = null
   const file = e?.target?.files?.[0] || null
@@ -106,10 +289,9 @@ const onFileSelect = (e) => {
   preview.value = null
 }
 
-// Sizin resim küçültme fonksiyonunuz (harika)
+// MEVCUT KODUNUZ - Aynen korundu
 const resizeImage = (file, maxSize = 1200) =>
   new Promise((resolve) => {
-    // ... (Kullanıcının resizeImage kodu - olduğu gibi kalacak) ...
     if (!file || !file.type.startsWith('image')) return resolve(file)
     const url = URL.createObjectURL(file)
     const img = new Image()
@@ -148,7 +330,7 @@ const resizeImage = (file, maxSize = 1200) =>
     }
   })
 
-// Sizin sharePost fonksiyonunuz (düzeltmelerle)
+// MEVCUT KODUNUZ - Aynen korundu (Sadece location eklendi)
 const sharePost = async () => {
   error.value = null
   loading.value = true
@@ -220,6 +402,7 @@ const sharePost = async () => {
       authorUsername: userDetails.username || 'Anonim',
       authorAvatarUrl: userDetails.profilePicUrl || '', 
       text: text.value.trim(),
+      location: location.value.trim(), // YENİ: Konum eklendi
       postType,
       mediaUrl,
       likes: [], 
@@ -244,6 +427,7 @@ const sharePost = async () => {
 
     // temizle
     text.value = ''
+    location.value = ''
     selectedFile.value = null
     if (preview.value) {
       try { URL.revokeObjectURL(preview.value) } catch(e){/*ignore*/ }
@@ -261,4 +445,33 @@ const sharePost = async () => {
     loading.value = false 
   } 
 }
+
+// Sayfa yüklendiğinde auth kontrolü
+onMounted(async () => {
+  if (!authStore.isAuthenticated) {
+    router.push('/login')
+  }
+})
 </script>
+
+<style scoped>
+.photo-upload-area {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.photo-upload-area:hover {
+  transform: translateY(-2px);
+}
+
+.preview-image {
+  border-radius: 8px;
+}
+
+/* Mobil uyumluluk */
+@media (max-width: 600px) {
+  .photo-upload-area {
+    min-height: 300px;
+    padding: 2rem;
+  }
+}
+</style>
