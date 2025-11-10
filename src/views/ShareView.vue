@@ -1,49 +1,115 @@
 <template>
-  <v-container class="py-6" style="max-width: 600px;">
-    <v-card class="pa-4 rounded-lg" elevation="3">
+  <v-container class="py-6" style="max-width: 500px;">
+    
+    <!-- 1. GÜVENLİK KONTROLÜ (Değişmedi) -->
+    <v-alert
+      v-if="!authStore.isApproved"
+      type="warning"
+      variant="tonal"
+      prominent
+      icon="mdi-alert-circle-outline"
+      class="mb-4"
+    >
+      <template v-slot:title>
+        Hesap Onay Bekliyor
+      </template>
+      Paylaşım yapabilmek için hesabınızın bir admin tarafından onaylanması gerekmektedir.
+    </v-alert>
 
-      <v-card-title class="text-h6">Yeni Gönderi</v-card-title>
-
-      <v-textarea
-        v-model="text"
-        label="Bir şeyler paylaş..."
-        rows="4"
-        auto-grow
-        variant="outlined"
-        class="mb-4"
-      ></v-textarea>
-
-      <!-- native input (Sizin çözümünüz) -->
+    <!-- 2. YENİ TASARIM (Resimdeki gibi) -->
+    <v-card v-else class="pa-4 rounded-lg" elevation="3">
+      
+      <!-- Gizli Dosya Girişi (Hâlâ Sizin Mantığınızı Kullanıyor, ama gizli) -->
       <input
         ref="fileInput" 
         type="file"
         accept="image/*,video/*,audio/*"
         @change="onFileSelect"
-        class="mb-4"
+        class="d-none"
       />
 
-      <!-- Önizleme -->
+      <!-- "Fotoğraf Yüklemek için Tıkla" Alanı (Dropzone) -->
+      <v-sheet
+        v-if="!preview"
+        border="dashed"
+        class="pa-8 d-flex flex-column align-center justify-center text-center dropzone"
+        rounded="lg"
+        @click="triggerFileInput"
+      >
+        <v-icon size="64" color="grey-lighten-1">mdi-image-outline</v-icon>
+        <div class="text-h6 mt-2">Medya yüklemek için tıkla</div>
+        <div class="text-caption text-grey">(Otomatik optimize edilecek)</div>
+      </v-sheet>
+
+      <!-- Önizleme (Sizin Kodunuz) -->
       <v-img
         v-if="preview"
         :src="preview"
         class="rounded-lg mb-3"
         height="260"
-        style="object-fit: contain; background:#111;"
+        style="object-fit: contain; background:#111; cursor: pointer;"
+        @click="triggerFileInput"
       />
+      
+      <!-- Açıklama Alanı (Yeni Stil) -->
+      <v-textarea
+        v-model="text"
+        label="Açıklama yaz..."
+        rows="3"
+        auto-grow
+        variant="solo-filled"
+        bg-color="grey-darken-3"
+        dark
+        class="mt-4 mb-2"
+        hide-details
+      ></v-textarea>
+
+      <!-- Konum Alanı (Yeni Stil - Şimdilik devre dışı) -->
+      <v-text-field
+        v-model="location"
+        label="Konum ekle (opsiyonel)"
+        variant="solo-filled"
+        bg-color="grey-darken-3"
+        dark
+        class="mb-4"
+        prepend-inner-icon="mdi-map-marker-outline"
+        hide-details
+        disabled
+      ></v-text-field>
 
       <v-alert v-if="error" type="error" class="mb-3" dense>
         {{ error }}
       </v-alert>
 
-      <v-btn
-        color="primary"
-        block
-        :loading="loading"
-        @click="sharePost"
-        rounded="lg"
-      >
-        Paylaş
-      </v-btn>
+      <!-- Butonlar (Yeni Stil) -->
+      <v-row class="mt-2">
+        <v-col>
+          <!-- İptal Butonu -->
+          <v-btn
+            block
+            variant="outlined"
+            rounded="lg"
+            size="large"
+            @click="clearForm"
+          >
+            İptal
+          </v-btn>
+        </v-col>
+        <v-col>
+          <!-- Paylaş Butonu (Degrade Stil) -->
+          <v-btn
+            block
+            :loading="loading"
+            @click="sharePost"
+            rounded="lg"
+            size="large"
+            class="gradient-button"
+          >
+            Paylaş
+          </v-btn>
+        </v-col>
+      </v-row>
+
     </v-card>
   </v-container>
 </template>
@@ -62,13 +128,36 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const text = ref('')
+const location = ref('') // YENİ: Konum alanı (henüz kullanılmıyor)
 const selectedFile = ref(null)
 const preview = ref(null)
 const loading = ref(false)
 const error = ref(null)
-const fileInput = ref(null)
+const fileInput = ref(null) // <input> etiketine erişmek için
 
-// Sizin onFileSelect fonksiyonunuz (harika)
+// YENİ: "Fotoğraf Yükle" alanına tıklandığında gizli input'u tetikler
+const triggerFileInput = () => {
+  if (fileInput.value) {
+    fileInput.value.click()
+  }
+}
+
+// YENİ: "İptal" butonu formu temizler
+const clearForm = () => {
+  text.value = ''
+  location.value = ''
+  selectedFile.value = null
+  if (preview.value) {
+    try { URL.revokeObjectURL(preview.value) } catch(e){/*ignore*/ }
+  }
+  preview.value = null
+  if (fileInput.value) fileInput.value.value = null
+  error.value = null
+}
+
+// === Aşağıdaki kodun tamamı, sizin çalışan kodunuzdur ===
+// === (Sadece 'authStore'dan bilgi alacak şekilde güncellendi) ===
+
 const onFileSelect = (e) => {
   error.value = null
   const file = e?.target?.files?.[0] || null
@@ -106,10 +195,8 @@ const onFileSelect = (e) => {
   preview.value = null
 }
 
-// Sizin resim küçültme fonksiyonunuz (harika)
 const resizeImage = (file, maxSize = 1200) =>
   new Promise((resolve) => {
-    // ... (Kullanıcının resizeImage kodu - olduğu gibi kalacak) ...
     if (!file || !file.type.startsWith('image')) return resolve(file)
     const url = URL.createObjectURL(file)
     const img = new Image()
@@ -148,18 +235,15 @@ const resizeImage = (file, maxSize = 1200) =>
     }
   })
 
-// Sizin sharePost fonksiyonunuz (düzeltmelerle)
 const sharePost = async () => {
   error.value = null
   loading.value = true
 
   try {
-    // (Güvenlik kontrolü için Pinia store'u kullanıyoruz)
     if (!authStore.isApproved) {
       throw new Error("Paylaşım yapmak için onaylı olmalısınız.")
     }
     
-    // (Kullanıcıyı 'account.get()' yerine Pinia'dan alıyoruz, daha hızlı)
     const user = authStore.authUser
     const userDetails = authStore.userDetails
 
@@ -170,14 +254,10 @@ const sharePost = async () => {
     let postType = 'text'
     let mediaUrl = '' 
 
-    // === GÜVENLİK DÜZELTMESİ (ADMİN SİLMESİ İÇİN) ===
-    // 'posts' (Depolama) Kovamıza eklediğimiz izinlerin aynısını,
-    // (Role.any() -> Read, Role.users() -> Create)
-    // dosyaya da (createFile) eklememiz gerekiyor.
     const filePermissions = [
-      Permission.read(Role.any()), // Herkes okuyabilir
-      Permission.delete(Role.users()), // YENİ: Giriş yapmış herkes silebilir
-      Permission.update(Role.users())  // YENİ: Giriş yapmış herkes güncelleyebilir
+      Permission.read(Role.any()),
+      Permission.delete(Role.users()),
+      Permission.update(Role.users())
     ]
 
     if (selectedFile.value) { 
@@ -191,10 +271,8 @@ const sharePost = async () => {
         bucketId,
         ID.unique(),
         uploadFile,
-        filePermissions // <-- DÜZELTME: İzinleri buraya da ekledik
+        filePermissions
       )
-
-      console.log('Uploaded file object:', uploaded)
 
       const fv = storage.getFileDownload(bucketId, uploaded.$id)
       mediaUrl = fv?.href || fv || '' 
@@ -204,17 +282,12 @@ const sharePost = async () => {
       else if (uploadFile.type.startsWith('audio')) postType = 'audio'
     }
 
-    // === GÜVENLİK DÜZELTMESİ (ADMİN SİLMESİ İÇİN) ===
-    // 'Posts' (Veritabanı) koleksiyonumuza eklediğimiz izinlerin aynısını,
-    // (Role.any() -> Create, Role.users() -> Read/Update/Delete)
-    // belgeye de (createDocument) eklememiz gerekiyor.
     const docPermissions = [
-      Permission.read(Role.any()),    // Herkes (Any) okuyabilir
-      Permission.update(Role.users()),// Giriş yapmış (Users) güncelleyebilir (Admin 'edit' için)
-      Permission.delete(Role.users()) // Giriş yapmış (Users) silebilir (Admin 'delete' için)
+      Permission.read(Role.any()),
+      Permission.update(Role.users()),
+      Permission.delete(Role.users())
     ]
     
-    // (BÖLÜM 12'den 'authorAvatarUrl' ve BÖLÜM 11'den 'likes' alanlarını ekliyoruz)
     const postData = {
       authorId: user.$id,
       authorUsername: userDetails.username || 'Anonim',
@@ -227,32 +300,21 @@ const sharePost = async () => {
       likesCount: 0 
     }
     
-    // "Sadece Metin" Kontrolü
     if (!postData.text && !postData.mediaUrl) {
       throw new Error("Paylaşmak için metin veya dosya girmelisiniz.")
     }
 
-    const created = await databases.createDocument(
+    await databases.createDocument(
       'main',
       'posts',
       ID.unique(),
       postData,
-      docPermissions // <-- DÜZELTME: İzinleri buraya ekledik
+      docPermissions
     )
 
-    console.log('Created post:', created)
-
-    // temizle
-    text.value = ''
-    selectedFile.value = null
-    if (preview.value) {
-      try { URL.revokeObjectURL(preview.value) } catch(e){/*ignore*/ }
-    }
-    preview.value = null
-    if (fileInput.value) fileInput.value.value = null 
-
+    clearForm() // Formu temizle
     loading.value = false 
-    router.push('/') 
+    router.push('/') // Yönlendir
 
   } catch (err) {
     console.error('sharePost error', err)
@@ -262,3 +324,31 @@ const sharePost = async () => {
   } 
 }
 </script>
+
+<!-- YENİ: Yeni tasarıma ait stiller -->
+<style scoped>
+/* YENİ: Dropzone stili */
+.dropzone {
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+.dropzone:hover {
+  background-color: #f0f0f0; /* Aydınlık tema için hafif hover */
+}
+
+/* YENİ: Resimdeki degrade (gradient) buton */
+.gradient-button {
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  color: white !important; /* Vuetify'ı ezmek için */
+}
+
+/* YENİ: Koyu (dark) text field'ların içindeki 'label' rengini
+   aydınlık temada daha görünür yap */
+/* 'deep' seçicisi, Vuetify'ın iç stillerini ezmemizi sağlar */
+:deep(.v-textarea .v-label) {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+:deep(.v-text-field .v-label) {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+</style>
