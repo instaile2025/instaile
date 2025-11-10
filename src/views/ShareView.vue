@@ -51,11 +51,14 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router' 
+// YENİ: Pinia Store'u import ediyoruz (Kullanıcı bilgisi için)
 import { useAuthStore } from '@/stores/auth' 
 import { storage, databases, account } from '@/plugins/appwrite'
-import { ID, Permission, Role, Query } in 'appwrite' 
+// YENİ: 'Query' eklendi (import listesine)
+import { ID, Permission, Role, Query } from 'appwrite' 
 
 const router = useRouter()
+// YENİ: Pinia Store'u çağırıyoruz
 const authStore = useAuthStore()
 
 const text = ref('')
@@ -151,12 +154,18 @@ const sharePost = async () => {
   loading.value = true
 
   try {
+    // (Güvenlik kontrolü için Pinia store'u kullanıyoruz)
     if (!authStore.isApproved) {
       throw new Error("Paylaşım yapmak için onaylı olmalısınız.")
     }
     
+    // (Kullanıcıyı 'account.get()' yerine Pinia'dan alıyoruz, daha hızlı)
     const user = authStore.authUser
     const userDetails = authStore.userDetails
+
+    if (!user || !userDetails) {
+      throw new Error("Kullanıcı oturumu bulunamadı. Lütfen tekrar giriş yapın.")
+    }
 
     let postType = 'text'
     let mediaUrl = '' 
@@ -205,6 +214,7 @@ const sharePost = async () => {
       Permission.delete(Role.users()) // Giriş yapmış (Users) silebilir (Admin 'delete' için)
     ]
     
+    // (BÖLÜM 12'den 'authorAvatarUrl' ve BÖLÜM 11'den 'likes' alanlarını ekliyoruz)
     const postData = {
       authorId: user.$id,
       authorUsername: userDetails.username || 'Anonim',
@@ -217,6 +227,7 @@ const sharePost = async () => {
       likesCount: 0 
     }
     
+    // "Sadece Metin" Kontrolü
     if (!postData.text && !postData.mediaUrl) {
       throw new Error("Paylaşmak için metin veya dosya girmelisiniz.")
     }
