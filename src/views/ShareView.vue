@@ -16,7 +16,7 @@
       Paylaşım yapabilmek için hesabınızın bir admin tarafından onaylanması gerekmektedir.
     </v-alert>
 
-    <!-- 2. YENİ TASARIM (Resimdeki gibi) -->
+    <!-- 2. YENİ TASARIM (Resimdeki gibi - DÜZELTİLMİŞ) -->
     <v-card v-else class="pa-4 rounded-lg" elevation="3">
       
       <!-- Gizli Dosya Girişi (Hâlâ Sizin Mantığınızı Kullanıyor, ama gizli) -->
@@ -42,40 +42,35 @@
       </v-sheet>
 
       <!-- Önizleme (Sizin Kodunuz) -->
+      <!-- YENİ: Tıklandığında dosyayı SIFIRLAR -->
       <v-img
         v-if="preview"
         :src="preview"
         class="rounded-lg mb-3"
         height="260"
         style="object-fit: contain; background:#111; cursor: pointer;"
-        @click="triggerFileInput"
+        @click="clearFile"
       />
       
-      <!-- Açıklama Alanı (Yeni Stil) -->
+      <!-- Açıklama Alanı (DÜZELTME: Artık aydınlık tema) -->
       <v-textarea
         v-model="text"
         label="Açıklama yaz..."
         rows="3"
         auto-grow
-        variant="solo-filled"
-        bg-color="grey-darken-3"
-        dark
-        class="mt-4 mb-2"
+        variant="outlined"
+        class="mt-4 mb-4"
         hide-details
       ></v-textarea>
 
-      <!-- Konum Alanı (Yeni Stil - Şimdilik devre dışı) -->
+      <!-- Konum Alanı (İsteğiniz üzerine KALDIRILDI) -->
+      <!-- 
       <v-text-field
         v-model="location"
         label="Konum ekle (opsiyonel)"
-        variant="solo-filled"
-        bg-color="grey-darken-3"
-        dark
-        class="mb-4"
-        prepend-inner-icon="mdi-map-marker-outline"
-        hide-details
-        disabled
+        ...
       ></v-text-field>
+      -->
 
       <v-alert v-if="error" type="error" class="mb-3" dense>
         {{ error }}
@@ -117,35 +112,29 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router' 
-// YENİ: Pinia Store'u import ediyoruz (Kullanıcı bilgisi için)
 import { useAuthStore } from '@/stores/auth' 
 import { storage, databases, account } from '@/plugins/appwrite'
-// YENİ: 'Query' eklendi (import listesine)
 import { ID, Permission, Role, Query } from 'appwrite' 
 
 const router = useRouter()
-// YENİ: Pinia Store'u çağırıyoruz
 const authStore = useAuthStore()
 
 const text = ref('')
-const location = ref('') // YENİ: Konum alanı (henüz kullanılmıyor)
+// const location = ref('') // Konum KALDIRILDI
 const selectedFile = ref(null)
 const preview = ref(null)
 const loading = ref(false)
 const error = ref(null)
-const fileInput = ref(null) // <input> etiketine erişmek için
+const fileInput = ref(null)
 
-// YENİ: "Fotoğraf Yükle" alanına tıklandığında gizli input'u tetikler
 const triggerFileInput = () => {
   if (fileInput.value) {
     fileInput.value.click()
   }
 }
 
-// YENİ: "İptal" butonu formu temizler
-const clearForm = () => {
-  text.value = ''
-  location.value = ''
+// YENİ: Sadece dosyayı ve önizlemeyi sıfırlar
+const clearFile = () => {
   selectedFile.value = null
   if (preview.value) {
     try { URL.revokeObjectURL(preview.value) } catch(e){/*ignore*/ }
@@ -155,8 +144,14 @@ const clearForm = () => {
   error.value = null
 }
 
+// "İptal" butonu artık 'clearFile'ı da çağırıyor
+const clearForm = () => {
+  clearFile() // Dosyayı temizle
+  text.value = ''
+  // location.value = '' // Konum KALDIRILDI
+}
+
 // === Aşağıdaki kodun tamamı, sizin çalışan kodunuzdur ===
-// === (Sadece 'authStore'dan bilgi alacak şekilde güncellendi) ===
 
 const onFileSelect = (e) => {
   error.value = null
@@ -197,6 +192,7 @@ const onFileSelect = (e) => {
 
 const resizeImage = (file, maxSize = 1200) =>
   new Promise((resolve) => {
+    // ... (Kullanıcının resizeImage kodu - olduğu gibi kalacak) ...
     if (!file || !file.type.startsWith('image')) return resolve(file)
     const url = URL.createObjectURL(file)
     const img = new Image()
@@ -325,7 +321,6 @@ const sharePost = async () => {
 }
 </script>
 
-<!-- YENİ: Yeni tasarıma ait stiller -->
 <style scoped>
 /* YENİ: Dropzone stili */
 .dropzone {
@@ -342,13 +337,5 @@ const sharePost = async () => {
   color: white !important; /* Vuetify'ı ezmek için */
 }
 
-/* YENİ: Koyu (dark) text field'ların içindeki 'label' rengini
-   aydınlık temada daha görünür yap */
-/* 'deep' seçicisi, Vuetify'ın iç stillerini ezmemizi sağlar */
-:deep(.v-textarea .v-label) {
-  color: rgba(255, 255, 255, 0.6) !important;
-}
-:deep(.v-text-field .v-label) {
-  color: rgba(255, 255, 255, 0.6) !important;
-}
+/* Koyu (dark) text field'lar için stiller KALDIRILDI */
 </style>
