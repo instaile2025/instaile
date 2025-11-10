@@ -1,4 +1,4 @@
-/* Appwrite Function: Yeni Gönderi Bildirimi - SON ÇÖZÜM */
+/* Appwrite Function: Yeni Gönderi Bildirimi - TÜM ABONELERE */
 export default async ({ req, res, log, error }) => {
   
   log('🔔 OneSignal Function başlatıldı');
@@ -20,13 +20,13 @@ export default async ({ req, res, log, error }) => {
     if (typeof postPayload === 'string' && postPayload.trim() !== '') {
       postPayload = JSON.parse(postPayload);
     } else if (!postPayload || postPayload === '' || postPayload === '{}') {
-      // ⭐⭐ APPWRITE TETİKLEYİCİSİ BOŞ GÖNDERİYOR - MANUEL DATA KULLAN
+      // ⭐ APPWRITE TETİKLEYİCİSİ BOŞ GÖNDERİYOR
       log('⚠️ Appwrite tetikleyicisi boş body gönderiyor');
       postPayload = {
-        authorUsername: "Melo1903", // ⭐ SİZİN KULLANICI ADINIZ
+        authorUsername: "Melo1903",
         text: "Yeni bir gönderi paylaştı",
-        postType: "text",
-        authorId: "690b05f40037297ec116", // ⭐ SİZİN USER ID'NİZ
+        postType: "text", 
+        authorId: "690b05f40037297ec116",
         $id: "auto-" + Date.now()
       };
       log('🔧 Manuel veri kullanılıyor:', JSON.stringify(postPayload));
@@ -63,37 +63,64 @@ export default async ({ req, res, log, error }) => {
 
   const notificationMessage = `${author} ${caption}`;
 
-  // ⭐⭐ KRİTİK: SADECE ABONE OLAN 2 KULLANICIYA GÖNDER
-  const subscribedPlayerIds = [
-    "5296c510-0b0d-4615-8720-7785247518f8", // Windows kullanıcısı
-    "10fa78b9-fece-4ceb-8f7c-c8b78c80e3cc"  // Linux kullanıcısı
-  ];
-
-  log(`🎯 Bildirim gönderilecek kullanıcılar: ${subscribedPlayerIds.length}`);
-
-  // 5. OneSignal'a Gönderilecek İsteği Hazırla
+  // 5. OneSignal'a Gönderilecek İsteği Hazırla - TÜM ABONELERE
   const oneSignalPayload = {
     app_id: ONESIGNAL_APP_ID,
-    // ⭐⭐ SEGMENTS YERİNE SPECIFIC PLAYER ID'LER
-    include_player_ids: subscribedPlayerIds,
+    
+    // ⭐⭐ TÜM ABONE OLAN KULLANICILARA GÖNDER
+    included_segments: ["Subscribed Users"],
+    
+    // ⭐⭐ GÖNDEREN KULLANICIYI HARİÇ TUT
+    excluded_segments: ["Test Users"], // Test segmenti yoksa boş kalabilir
+    // excluded_players: ["GONDEREN_PLAYER_ID"], // Eğer gönderenin player ID'sini biliyorsanız
+    
     headings: { en: "Yeni Gönderi! 🎉" },
     contents: { en: notificationMessage },
+    
+    // ⭐⭐ HIZLI TESLİMAT AYARLARI
+    priority: 10,
+    delivery_optimization: "delivery_optimized",
+    ttl: 0,
+    
+    // Web push ayarları
+    web_push_topic: "new-post", 
+    chrome_web_icon: "https://instailem.vercel.app/icon-192.png",
+    chrome_web_badge: "https://instailem.vercel.app/icon-192.png",
+    
     data: {
       postId: postPayload.$id || 'unknown',
       type: 'new_post',
       author: author,
-      postType: postPayload.postType || 'text'
+      postType: postPayload.postType || 'text',
+      timestamp: Date.now(),
+      authorId: postPayload.authorId // Gönderen ID'si (filtreleme için)
     },
-    url: 'https://instailem.vercel.app/', // ⭐ BURAYA UYGULAMA URL'NİZİ YAZIN!
+    url: 'https://instailem.vercel.app/',
+    
+    // iOS ayarları
     ios_badgeType: 'Increase',
-    ios_badgeCount: 1
+    ios_badgeCount: 1,
+    
+    // Android ayarları
+    android_accent_color: "FF007ACC",
+    android_led_color: "FF007ACC",
+    android_visibility: 1
   };
 
-  log(`📤 OneSignal payload: ${JSON.stringify(oneSignalPayload)}`);
+  log(`📤 OneSignal payload hazır: ${JSON.stringify({
+    app_id: oneSignalPayload.app_id,
+    included_segments: oneSignalPayload.included_segments,
+    excluded_segments: oneSignalPayload.excluded_segments,
+    headings: oneSignalPayload.headings,
+    contents: oneSignalPayload.contents,
+    priority: oneSignalPayload.priority,
+    target: "TÜM ABONE OLAN KULLANICILAR (Gönderen Hariç)"
+  })}`);
 
   // 6. OneSignal API'sine istek gönder
   try {
-    log('🚀 Bildirim gönderiliyor...');
+    log('🚀 TÜM ABONELERE BİLDİRİM GÖNDERİLİYOR...');
+    const startTime = Date.now();
 
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
@@ -105,26 +132,39 @@ export default async ({ req, res, log, error }) => {
     });
 
     const responseData = await response.json();
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+
+    log(`⚡ OneSignal API yanıt süresi: ${duration}ms`);
 
     if (!response.ok) {
       error(`❌ OneSignal API Hatası: ${response.status} - ${JSON.stringify(responseData)}`);
       return res.json({ success: false, error: 'OneSignal API hatası' }, 500);
     }
 
-    // ⭐⭐ BAŞARI KONTROLÜ
+    // ⭐ BAŞARI KONTROLÜ
     if (responseData.id && !responseData.errors) {
-      log('✅ BİLDİRİM BAŞARIYLA GÖNDERİLDİ!');
-      log(`📨 OneSignal Yanıt ID: ${responseData.id}`);
-      log(`👥 Hedeflenen: ${responseData.recipients || subscribedPlayerIds.length}`);
+      log(`✅ BİLDİRİM TÜM ABONELERE GÖNDERİLDİ! ID: ${responseData.id}`);
+      log(`👥 Toplam Hedeflenen: ${responseData.recipients || 'Tüm Aboneler'}`);
+      log(`⏱️ Toplam süre: ${duration}ms`);
+      
+      // Teslimat istatistikleri
+      if (responseData.recipients) {
+        log(`📊 Teslimat: ${responseData.recipients} kullanıcı`);
+      } else {
+        log(`📊 Teslimat: Tüm abone olan kullanıcılara gönderildi`);
+      }
     } else {
       log('⚠️ OneSignal yanıtı:', JSON.stringify(responseData));
     }
     
     return res.json({ 
       success: true, 
-      message: 'Bildirim gönderildi',
+      message: 'Bildirim tüm abonelere gönderildi (gönderen hariç)',
       notification: notificationMessage,
-      targetUsers: subscribedPlayerIds.length,
+      target: "Tüm Abone Olan Kullanıcılar",
+      excluded: "Gönderen Kullanıcı",
+      deliveryTime: duration + 'ms',
       oneSignalResponse: responseData 
     });
 
