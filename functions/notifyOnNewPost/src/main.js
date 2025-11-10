@@ -1,4 +1,4 @@
-/* Appwrite Function: Yeni Gönderi Bildirimi - TÜM ABONELERE */
+/* Appwrite Function: Yeni Gönderi Bildirimi - ACTIVE USERS */
 export default async ({ req, res, log, error }) => {
   
   log('🔔 OneSignal Function başlatıldı');
@@ -63,23 +63,24 @@ export default async ({ req, res, log, error }) => {
 
   const notificationMessage = `${author} ${caption}`;
 
-  // 5. OneSignal'a Gönderilecek İsteği Hazırla - TÜM ABONELERE
+  // 5. OneSignal'a Gönderilecek İsteği Hazırla - TÜM AKTİF KULLANICILARA
   const oneSignalPayload = {
     app_id: ONESIGNAL_APP_ID,
     
-    // ⭐⭐ TÜM ABONE OLAN KULLANICILARA GÖNDER
-    included_segments: ["Subscribed Users"],
-    
-    // ⭐⭐ GÖNDEREN KULLANICIYI HARİÇ TUT
-    excluded_segments: ["Test Users"], // Test segmenti yoksa boş kalabilir
-    // excluded_players: ["GONDEREN_PLAYER_ID"], // Eğer gönderenin player ID'sini biliyorsanız
+    // ⭐⭐ TÜM AKTİF KULLANICILARA GÖNDER (Segment yerine filters)
+    filters: [
+      // Son 30 gün içinde aktif olan tüm kullanıcılar
+      {"field": "last_session", "relation": ">", "value": Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60)},
+      // Session sayısı 1'den fazla olanlar (gerçek kullanıcılar)
+      {"field": "session_count", "relation": ">", "value": "1"}
+    ],
     
     headings: { en: "Yeni Gönderi! 🎉" },
     contents: { en: notificationMessage },
     
     // ⭐⭐ HIZLI TESLİMAT AYARLARI
     priority: 10,
-    delivery_optimization: "delivery_optimized",
+    delivery_optimization: "delivery_optimized", 
     ttl: 0,
     
     // Web push ayarları
@@ -93,7 +94,7 @@ export default async ({ req, res, log, error }) => {
       author: author,
       postType: postPayload.postType || 'text',
       timestamp: Date.now(),
-      authorId: postPayload.authorId // Gönderen ID'si (filtreleme için)
+      authorId: postPayload.authorId
     },
     url: 'https://instailem.vercel.app/',
     
@@ -109,17 +110,16 @@ export default async ({ req, res, log, error }) => {
 
   log(`📤 OneSignal payload hazır: ${JSON.stringify({
     app_id: oneSignalPayload.app_id,
-    included_segments: oneSignalPayload.included_segments,
-    excluded_segments: oneSignalPayload.excluded_segments,
+    filters: oneSignalPayload.filters,
     headings: oneSignalPayload.headings,
     contents: oneSignalPayload.contents,
     priority: oneSignalPayload.priority,
-    target: "TÜM ABONE OLAN KULLANICILAR (Gönderen Hariç)"
+    target: "SON 30 GÜNDE AKTİF TÜM KULLANICILAR"
   })}`);
 
   // 6. OneSignal API'sine istek gönder
   try {
-    log('🚀 TÜM ABONELERE BİLDİRİM GÖNDERİLİYOR...');
+    log('🚀 AKTİF KULLANICILARA BİLDİRİM GÖNDERİLİYOR...');
     const startTime = Date.now();
 
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
@@ -144,26 +144,28 @@ export default async ({ req, res, log, error }) => {
 
     // ⭐ BAŞARI KONTROLÜ
     if (responseData.id && !responseData.errors) {
-      log(`✅ BİLDİRİM TÜM ABONELERE GÖNDERİLDİ! ID: ${responseData.id}`);
-      log(`👥 Toplam Hedeflenen: ${responseData.recipients || 'Tüm Aboneler'}`);
+      log(`✅ BİLDİRİM AKTİF KULLANICILARA GÖNDERİLDİ! ID: ${responseData.id}`);
+      log(`👥 Toplam Hedeflenen: ${responseData.recipients || 'Tüm Aktif Kullanıcılar'}`);
       log(`⏱️ Toplam süre: ${duration}ms`);
       
-      // Teslimat istatistikleri
       if (responseData.recipients) {
         log(`📊 Teslimat: ${responseData.recipients} kullanıcı`);
-      } else {
-        log(`📊 Teslimat: Tüm abone olan kullanıcılara gönderildi`);
       }
     } else {
       log('⚠️ OneSignal yanıtı:', JSON.stringify(responseData));
+      
+      // ⭐ EĞER HATA ALIRSAK, MANUEL PLAYER ID'LERLE GÖNDER
+      if (responseData.errors && responseData.errors.includes("All included players are not subscribed")) {
+        log('🔄 Manuel Player ID lerle gönderim deneniyor...');
+        await sendToSpecificPlayers(ONESIGNAL_APP_ID, ONESIGNAL_REST_API_KEY, notificationMessage, postPayload);
+      }
     }
     
     return res.json({ 
       success: true, 
-      message: 'Bildirim tüm abonelere gönderildi (gönderen hariç)',
+      message: 'Bildirim aktif kullanıcılara gönderildi',
       notification: notificationMessage,
-      target: "Tüm Abone Olan Kullanıcılar",
-      excluded: "Gönderen Kullanıcı",
+      target: "Son 30 Günde Aktif Tüm Kullanıcılar",
       deliveryTime: duration + 'ms',
       oneSignalResponse: responseData 
     });
@@ -173,3 +175,49 @@ export default async ({ req, res, log, error }) => {
     return res.json({ success: false, error: e.message }, 500);
   }
 };
+
+// ⭐⭐ YEDEK FONKSİYON: Manuel Player ID'lerle gönderim
+async function sendToSpecificPlayers(appId, apiKey, message, postPayload) {
+  try {
+    const specificPlayerIds = [
+      "5296c510-0b0d-4615-8720-7785247518f8", // Windows
+      "10fa78b9-fece-4ceb-8f7c-c8b78c80e3cc"  // Linux
+    ];
+
+    const backupPayload = {
+      app_id: appId,
+      include_player_ids: specificPlayerIds,
+      headings: { en: "Yeni Gönderi! 🎉" },
+      contents: { en: message },
+      priority: 10,
+      data: {
+        postId: postPayload.$id,
+        type: 'new_post',
+        author: postPayload.authorUsername
+      },
+      url: 'https://instailem.vercel.app/'
+    };
+
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Basic ${apiKey}` 
+      },
+      body: JSON.stringify(backupPayload)
+    });
+
+    const result = await response.json();
+    
+    if (result.id && !result.errors) {
+      console.log('✅ YEDEK: Manuel gönderim başarılı!', result.id);
+    } else {
+      console.log('❌ YEDEK: Manuel gönderim hatası', result.errors);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('❌ Yedek gönderim hatası:', error);
+    return null;
+  }
+}
