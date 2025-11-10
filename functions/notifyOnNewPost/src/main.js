@@ -1,5 +1,6 @@
-/* Appwrite Function: Yeni Gönderi Bildirimi - TAM KOD */
+/* Appwrite Function: Yeni Gönderi Bildirimi - DÜZELTİLMİŞ TAM KOD */
 export default async ({ req, res, log, error }) => {
+  
   // 1. Gizli Anahtarları Appwrite Değişkenlerinden Al
   const ONESIGNAL_APP_ID = process.env.ONESIGNAL_APP_ID;
   const ONESIGNAL_REST_API_KEY = process.env.ONESIGNAL_REST_API_KEY;
@@ -11,27 +12,53 @@ export default async ({ req, res, log, error }) => {
 
   log('🔔 OneSignal Function başlatıldı');
 
-  // 2. Tetikleyici Verisini (Payload) Al
+  // 2. Tetikleyici Verisini (Payload) Al - DÜZELTİLDİ!
   let postPayload;
   try {
+    // ⭐⭐ ÖNEMLİ DÜZELTME: Appwrite Functions'ta body doğrudan object olarak gelir
     postPayload = req.body;
     
-    // Eğer string ise parse et
+    log(`📦 Raw payload type: ${typeof postPayload}`);
+    log(`📦 Raw payload: ${JSON.stringify(postPayload)}`);
+    
+    // Eğer string geliyorsa parse et, değilse direkt kullan
     if (typeof postPayload === 'string') {
+      log('🔧 Payload string olarak geldi, parsing...');
       postPayload = JSON.parse(postPayload);
     }
     
-    log(`📦 Payload alındı: ${JSON.stringify(postPayload)}`);
+    log(`✅ Parsed payload: ${JSON.stringify(postPayload)}`);
     
   } catch (e) {
-    error(`❌ Payload parse hatası: ${e.message}`);
-    return res.json({ success: false, error: 'Payload parse hatası' }, 400);
+    error(`❌ Payload işleme hatası: ${e.message}`);
+    log(`❌ Raw req.body: ${req.body}`);
+    log(`❌ Error stack: ${e.stack}`);
+    
+    return res.json({ 
+      success: false, 
+      error: 'Payload işleme hatası',
+      debug: {
+        bodyType: typeof req.body,
+        body: req.body,
+        error: e.message
+      }
+    }, 400);
   }
 
   // 3. Payload kontrolü
-  if (!postPayload || !postPayload.authorUsername) {
-    error('❌ Geçersiz tetikleyici verisi. authorUsername eksik.');
-    return res.json({ success: false, error: 'Geçersiz payload' }, 400);
+  if (!postPayload) {
+    error('❌ Boş payload alındı');
+    return res.json({ success: false, error: 'Boş payload' }, 400);
+  }
+
+  if (!postPayload.authorUsername) {
+    error('❌ authorUsername eksik');
+    log(`❌ Mevcut payload: ${JSON.stringify(postPayload)}`);
+    return res.json({ 
+      success: false, 
+      error: 'authorUsername eksik',
+      receivedPayload: postPayload
+    }, 400);
   }
 
   log(`👤 Yeni gönderi algılandı. Gönderen: ${postPayload.authorUsername}`);
@@ -66,7 +93,7 @@ export default async ({ req, res, log, error }) => {
       author: author,
       postType: postPayload.postType || 'text'
     },
-    url: 'https://instailem.vercel.app/', // Uygulamanızın URL'sini buraya yazın
+    url: 'https://instailem.vercel.app/', // ⭐ BURAYA UYGULAMA URL'NİZİ YAZIN!
     ios_badgeType: 'Increase',
     ios_badgeCount: 1
   };
