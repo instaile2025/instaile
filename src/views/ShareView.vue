@@ -109,6 +109,7 @@ const onFileSelect = (e) => {
 // Sizin resim küçültme fonksiyonunuz (harika)
 const resizeImage = (file, maxSize = 1200) =>
   new Promise((resolve) => {
+    // ... (Kullanıcının resizeImage kodu - olduğu gibi kalacak) ...
     if (!file || !file.type.startsWith('image')) return resolve(file)
     const url = URL.createObjectURL(file)
     const img = new Image()
@@ -158,8 +159,8 @@ const sharePost = async () => {
       throw new Error("Paylaşım yapmak için onaylı olmalısınız.")
     }
     
-    // Kullanıcı bilgilerini hem Pinia'dan hem de doğrudan account'tan alalım
-    const user = await account.get()
+    // (Kullanıcıyı 'account.get()' yerine Pinia'dan alıyoruz, daha hızlı)
+    const user = authStore.authUser
     const userDetails = authStore.userDetails
 
     if (!user || !userDetails) {
@@ -169,13 +170,14 @@ const sharePost = async () => {
     let postType = 'text'
     let mediaUrl = '' 
 
-    // DÜZELTİLMİŞ: Hem kullanıcı hem de admin için izin yapısı
+    // === GÜVENLİK DÜZELTMESİ (ADMİN SİLMESİ İÇİN) ===
+    // 'posts' (Depolama) Kovamıza eklediğimiz izinlerin aynısını,
+    // (Role.any() -> Read, Role.users() -> Create)
+    // dosyaya da (createFile) eklememiz gerekiyor.
     const filePermissions = [
       Permission.read(Role.any()), // Herkes okuyabilir
-      Permission.delete(Role.user(user.$id)), // Sadece yazar silebilir
-      Permission.update(Role.user(user.$id)), // Sadece yazar güncelleyebilir
-      Permission.delete(Role.team('admins')), // Adminler silebilir (TEAM OLMALI)
-      Permission.update(Role.team('admins'))  // Adminler güncelleyebilir (TEAM OLMALI)
+      Permission.delete(Role.users()), // YENİ: Giriş yapmış herkes silebilir
+      Permission.update(Role.users())  // YENİ: Giriş yapmış herkes güncelleyebilir
     ]
 
     if (selectedFile.value) { 
@@ -189,7 +191,7 @@ const sharePost = async () => {
         bucketId,
         ID.unique(),
         uploadFile,
-        filePermissions // DÜZELTİLMİŞ: Tam izinler
+        filePermissions // <-- DÜZELTME: İzinleri buraya da ekledik
       )
 
       console.log('Uploaded file object:', uploaded)
@@ -202,15 +204,17 @@ const sharePost = async () => {
       else if (uploadFile.type.startsWith('audio')) postType = 'audio'
     }
 
-    // DÜZELTİLMİŞ: Hem kullanıcı hem de admin için izin yapısı
+    // === GÜVENLİK DÜZELTMESİ (ADMİN SİLMESİ İÇİN) ===
+    // 'Posts' (Veritabanı) koleksiyonumuza eklediğimiz izinlerin aynısını,
+    // (Role.any() -> Create, Role.users() -> Read/Update/Delete)
+    // belgeye de (createDocument) eklememiz gerekiyor.
     const docPermissions = [
-      Permission.read(Role.any()),    // Herkes okuyabilir
-      Permission.update(Role.user(user.$id)), // Sadece yazar güncelleyebilir
-      Permission.delete(Role.user(user.$id)), // Sadece yazar silebilir
-      Permission.update(Role.team('admins')), // Adminler güncelleyebilir (TEAM OLMALI)
-      Permission.delete(Role.team('admins'))  // Adminler silebilir (TEAM OLMALI)
+      Permission.read(Role.any()),    // Herkes (Any) okuyabilir
+      Permission.update(Role.users()),// Giriş yapmış (Users) güncelleyebilir (Admin 'edit' için)
+      Permission.delete(Role.users()) // Giriş yapmış (Users) silebilir (Admin 'delete' için)
     ]
     
+    // (BÖLÜM 12'den 'authorAvatarUrl' ve BÖLÜM 11'den 'likes' alanlarını ekliyoruz)
     const postData = {
       authorId: user.$id,
       authorUsername: userDetails.username || 'Anonim',
@@ -233,7 +237,7 @@ const sharePost = async () => {
       'posts',
       ID.unique(),
       postData,
-      docPermissions // DÜZELTİLMİŞ: Tam izinler
+      docPermissions // <-- DÜZELTME: İzinleri buraya ekledik
     )
 
     console.log('Created post:', created)
