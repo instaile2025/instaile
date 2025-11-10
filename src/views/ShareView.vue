@@ -256,14 +256,17 @@ const triggerNotification = async (postData) => {
   try {
     notificationStatus.value = 'Gönderiliyor...'
     console.log('🚀 Bildirim fonksiyonu manuel çağrılıyor...')
+    console.log('📦 Gönderilen veri:', postData) // ⭐ BU SATIRI EKLEDİM
     
     // Appwrite Function URL'si
     const functionUrl = 'https://690df0c900255ed6f16a.fra.appwrite.run'
     
+    // ⭐ HEADERS'A USER-AGENT EKLEYİN (CORS için)
     const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'Instaile-App/1.0'
       },
       body: JSON.stringify(postData)
     })
