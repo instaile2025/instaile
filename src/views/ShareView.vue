@@ -118,6 +118,7 @@
         <div><strong>Gönderen:</strong> {{ lastPostData.authorUsername }}</div>
         <div><strong>Metin:</strong> {{ lastPostData.text || 'Boş' }}</div>
         <div><strong>Tip:</strong> {{ lastPostData.postType }}</div>
+        <div><strong>Bildirim Durumu:</strong> {{ notificationStatus }}</div>
         <div><strong>Tarih:</strong> {{ new Date().toLocaleString('tr-TR') }}</div>
       </v-alert>
 
@@ -141,8 +142,9 @@ const preview = ref(null)
 const loading = ref(false)
 const error = ref(null)
 const fileInput = ref(null)
-const debugMode = ref(false) // YENİ: Debug modu
-const lastPostData = ref(null) // YENİ: Son gönderi bilgisi
+const debugMode = ref(false)
+const lastPostData = ref(null)
+const notificationStatus = ref('') // YENİ: Bildirim durumu
 
 const triggerFileInput = () => {
   if (fileInput.value) {
@@ -163,7 +165,8 @@ const clearFile = () => {
 const clearForm = () => {
   clearFile()
   text.value = ''
-  lastPostData.value = null // Debug verisini temizle
+  lastPostData.value = null
+  notificationStatus.value = ''
 }
 
 // === DOSYA SEÇİM FONKSİYONU ===
@@ -248,10 +251,57 @@ const resizeImage = (file, maxSize = 1200) =>
     }
   })
 
-// === PAYLAŞIM FONKSİYONU (GÜNCELLENDİ) ===
+// === BİLDİRİM FONKSİYONU - MANUEL ÇAĞRI ===
+const triggerNotification = async (postData) => {
+  try {
+    notificationStatus.value = 'Gönderiliyor...'
+    console.log('🚀 Bildirim fonksiyonu manuel çağrılıyor...')
+    
+    // Appwrite Function URL'si
+    const functionUrl = 'https://690df0c900255ed6f16a.fra.appwrite.run'
+    
+    const response = await fetch(functionUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(postData)
+    })
+    
+    const result = await response.json()
+    console.log('📨 Bildirim fonksiyonu yanıtı:', result)
+    
+    if (result.success) {
+      notificationStatus.value = '✅ Başarılı!'
+      console.log('✅ Bildirim başarıyla tetiklendi!')
+      if (debugMode.value) {
+        alert(`Bildirim başarıyla gönderildi!\n\n"${result.notification}"`)
+      }
+    } else {
+      notificationStatus.value = '❌ Hata!'
+      console.warn('⚠️ Bildirim tetiklenemedi:', result.error)
+      if (debugMode.value) {
+        alert(`Bildirim gönderilemedi: ${result.error}`)
+      }
+    }
+    
+    return result
+    
+  } catch (notifError) {
+    notificationStatus.value = '❌ Bağlantı Hatası!'
+    console.error('❌ Bildirim tetikleme hatası:', notifError)
+    if (debugMode.value) {
+      alert(`Bildirim bağlantı hatası: ${notifError.message}`)
+    }
+    return { success: false, error: notifError.message }
+  }
+}
+
+// === PAYLAŞIM FONKSİYONU (MANUEL BİLDİRİM İLE) ===
 const sharePost = async () => {
   error.value = null
   loading.value = true
+  notificationStatus.value = ''
 
   try {
     if (!authStore.isApproved) {
@@ -326,10 +376,9 @@ const sharePost = async () => {
 
     if (debugMode.value) {
       console.log('📝 Gönderi verisi hazır:', postData)
-      console.log('🚀 Appwrite Function tetiklenecek...')
     }
 
-    // GÖNDERİYİ OLUŞTUR
+    // 1. ÖNCE GÖNDERİYİ OLUŞTUR
     const created = await databases.createDocument(
       'main',
       'posts',
@@ -338,8 +387,7 @@ const sharePost = async () => {
       docPermissions
     )
 
-    console.log('✅ GÖNDERİ OLUŞTURULDU - Appwrite Function TETİKLENMELİ!')
-    console.log('📦 Gönderi ID:', created.$id)
+    console.log('✅ GÖNDERİ OLUŞTURULDU:', created.$id)
     console.log('👤 Gönderen:', created.authorUsername)
     console.log('📝 Metin:', created.text || 'Boş')
     console.log('🎨 Tip:', created.postType)
@@ -347,22 +395,36 @@ const sharePost = async () => {
     // Debug için son gönderi bilgisini kaydet
     lastPostData.value = created
 
-    // BAŞARI MESAJI
+    // 2. SONRA BİLDİRİMİ MANUEL TETİKLE
     if (debugMode.value) {
-      alert(`✅ Gönderi paylaşıldı!\n\nAppwrite Function tetiklendi.\nKonsolu kontrol edin.`)
+      console.log('🚀 Manuel bildirim tetikleniyor...')
+    }
+    
+    const notificationResult = await triggerNotification(created)
+    
+    if (debugMode.value) {
+      console.log('📊 Bildirim sonucu:', notificationResult)
+    }
+
+    // BAŞARI MESAJI
+    if (debugMode.value && notificationResult.success) {
+      alert(`✅ Gönderi paylaşıldı!\n\nBildirim başarıyla gönderildi:\n"${notificationResult.notification}"`)
+    } else if (debugMode.value && !notificationResult.success) {
+      alert(`✅ Gönderi paylaşıldı!\n\nBildirim gönderilemedi ama paylaşım başarılı.`)
     }
 
     clearForm()
     loading.value = false 
     
-    // 2 saniye bekle ve ana sayfaya yönlendir
+    // Ana sayfaya yönlendir
     setTimeout(() => {
       router.push('/')
-    }, 2000)
+    }, 1500)
 
   } catch (err) {
     console.error('❌ sharePost hatası:', err)
     error.value = err?.message || String(err)
+    notificationStatus.value = '❌ Paylaşım Hatası!'
     alert('Hata: ' + (err?.message || String(err)))
     loading.value = false 
   } 
