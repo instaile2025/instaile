@@ -1,9 +1,9 @@
-/* Appwrite Function: Bildirim - CORS DÜZELTMESİ (Appwrite Uyumlu) */
+/* Appwrite Function: Bildirim - CORS & OneSignal DÜZELTMESİ */
 export default async ({ req, res, log, error }) => {
   
   // ⭐⭐⭐ APPWRITE CORS HEADERS - Doğru yöntem ⭐⭐⭐
   // Appwrite'da headers bu şekilde ayarlanır
-  res.headers = {
+  const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, User-Agent, X-Requested-With'
@@ -12,11 +12,7 @@ export default async ({ req, res, log, error }) => {
   // OPTIONS isteği için (preflight)
   if (req.method === 'OPTIONS') {
     log('🔄 CORS Preflight isteği alındı');
-    return res.send({ success: true }, 200, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, User-Agent, X-Requested-With'
-    });
+    return res.send('', 204, corsHeaders);
   }
 
   log('🔔 OneSignal Function - MANUEL ÇAĞRILDI');
@@ -27,28 +23,25 @@ export default async ({ req, res, log, error }) => {
 
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
     error('❌ OneSignal anahtarları eksik');
-    return res.json({ success: false, error: 'Gizli anahtarlar eksik' }, 500);
+    return res.json({ success: false, error: 'Gizli anahtarlar eksik' }, 500, corsHeaders);
   }
 
-  // 2. MANUEL PAYLOAD AL - DÜZELTİLDİ
+  // 2. MANUEL PAYLOAD AL
   let postPayload;
   try {
     log(`📦 Gelen req.body: ${JSON.stringify(req.body)}`);
-    log(`📦 Gelen req.body tipi: ${typeof req.body}`);
     
-    // ⭐⭐ YENİ YÖNTEM: Body'yi doğru şekilde parse et
     if (typeof req.body === 'string') {
       if (req.body.trim() === '') {
         error('❌ Boş body alındı');
-        return res.json({ success: false, error: 'Boş body' }, 400);
+        return res.json({ success: false, error: 'Boş body' }, 400, corsHeaders);
       }
       postPayload = JSON.parse(req.body);
     } else if (typeof req.body === 'object' && req.body !== null) {
-      // Zaten object ise direkt kullan
       postPayload = req.body;
     } else {
       error(`❌ Geçersiz body tipi: ${typeof req.body}`);
-      return res.json({ success: false, error: 'Geçersiz body tipi' }, 400);
+      return res.json({ success: false, error: 'Geçersiz body tipi' }, 400, corsHeaders);
     }
     
     log(`✅ Payload başarıyla alındı:`, {
@@ -60,33 +53,19 @@ export default async ({ req, res, log, error }) => {
     
   } catch (e) {
     error(`❌ Payload parse hatası: ${e.message}`);
-    log(`❌ Raw body: ${req.body}`);
     return res.json({ 
       success: false, 
-      error: 'Payload parse hatası',
-      rawBody: req.body
-    }, 400);
+      error: 'Payload parse hatası'
+    }, 400, corsHeaders);
   }
 
-  // 3. Payload kontrolü - GÜÇLENDİRİLDİ
-  if (!postPayload) {
-    error('❌ Post payload boş');
-    return res.json({ success: false, error: 'Post payload boş' }, 400);
-  }
-
-  if (!postPayload.authorUsername) {
-    error('❌ authorUsername eksik');
-    log(`❌ Mevcut payload: ${JSON.stringify(postPayload)}`);
+  // 3. Payload kontrolü
+  if (!postPayload || !postPayload.authorUsername || !postPayload.authorId) {
+    error('❌ Eksik payload verisi');
     return res.json({ 
       success: false, 
-      error: 'authorUsername eksik',
-      receivedPayload: postPayload 
-    }, 400);
-  }
-
-  if (!postPayload.authorId) {
-    error('❌ authorId eksik');
-    return res.json({ success: false, error: 'authorId eksik' }, 400);
+      error: 'Eksik payload verisi' 
+    }, 400, corsHeaders);
   }
 
   const author = postPayload.authorUsername;
@@ -114,19 +93,17 @@ export default async ({ req, res, log, error }) => {
 
   log(`📝 Bildirim mesajı: ${notificationMessage}`);
 
-  // 5. OneSignal'a Gönder - GÖNDEREN HARİÇ
+  // 5. OneSignal'a Gönder - DÜZELTİLMİŞ FILTER
   const oneSignalPayload = {
     app_id: ONESIGNAL_APP_ID,
+    // ⭐ DÜZELTİLDİ: external_user_id yerine tags kullan
     filters: [
-      {"field": "last_session", "relation": ">", "value": Math.floor(Date.now() / 1000) - (30 * 24 * 60 * 60)},
-      {"field": "session_count", "relation": ">", "value": "1"},
-      {"field": "external_user_id", "relation": "!=", "value": authorId}
+      {"field": "tag", "key": "user_id", "relation": "!=", "value": authorId},
+      {"field": "last_session", "relation": ">", "hours_ago": "24"}
     ],
     headings: { en: "Yeni Gönderi! 🎉" },
     contents: { en: notificationMessage },
     priority: 10,
-    delivery_optimization: "delivery_optimized",
-    ttl: 0,
     data: {
       postId: postPayload.$id || 'unknown',
       type: 'new_post',
@@ -139,11 +116,7 @@ export default async ({ req, res, log, error }) => {
     chrome_web_icon: "https://instailem.vercel.app/icon-192.png"
   };
 
-  log(`🎯 OneSignal payload: ${JSON.stringify({
-    target: `Aktif kullanıcılar (${author} hariç)`,
-    message: notificationMessage,
-    filters: oneSignalPayload.filters.length
-  })}`);
+  log(`🎯 OneSignal payload: ${JSON.stringify(oneSignalPayload)}`);
 
   // 6. OneSignal API'sine istek gönder
   try {
@@ -164,37 +137,45 @@ export default async ({ req, res, log, error }) => {
     const duration = endTime - startTime;
 
     log(`⚡ OneSignal API yanıt süresi: ${duration}ms`);
+    log(`📨 OneSignal yanıtı: ${JSON.stringify(responseData)}`);
 
     if (!response.ok) {
       error(`❌ OneSignal API Hatası: ${response.status} - ${JSON.stringify(responseData)}`);
-      return res.json({ success: false, error: 'OneSignal API hatası' }, 500);
+      return res.json({ 
+        success: false, 
+        error: 'OneSignal API hatası',
+        details: responseData
+      }, 500, corsHeaders);
     }
 
     // ⭐ BAŞARI KONTROLÜ
     if (responseData.id && !responseData.errors) {
       log(`✅ BİLDİRİM BAŞARIYLA GÖNDERİLDİ! ID: ${responseData.id}`);
       log(`👥 Hedeflenen: ${responseData.recipients || 'Tüm aktif kullanıcılar'}`);
-      log(`⏱️ Süre: ${duration}ms`);
       
-      if (responseData.recipients) {
-        log(`📊 ${responseData.recipients} kullanıcıya iletildi`);
-      }
+      return res.json({ 
+        success: true, 
+        message: 'Bildirim gönderildi',
+        notification: notificationMessage,
+        target: "Tüm aktif kullanıcılar",
+        excluded: author,
+        deliveryTime: duration + 'ms',
+        oneSignalResponse: responseData 
+      }, 200, corsHeaders);
     } else {
-      log('⚠️ OneSignal yanıtı:', JSON.stringify(responseData));
+      error(`❌ OneSignal gönderim hatası: ${JSON.stringify(responseData)}`);
+      return res.json({ 
+        success: false, 
+        error: 'Bildirim gönderilemedi',
+        details: responseData
+      }, 500, corsHeaders);
     }
-    
-    return res.json({ 
-      success: true, 
-      message: 'Bildirim gönderildi',
-      notification: notificationMessage,
-      target: "Tüm aktif kullanıcılar",
-      excluded: author,
-      deliveryTime: duration + 'ms',
-      oneSignalResponse: responseData 
-    });
 
   } catch (e) {
     error(`❌ OneSignal bağlantı hatası: ${e.message}`);
-    return res.json({ success: false, error: e.message }, 500);
+    return res.json({ 
+      success: false, 
+      error: e.message 
+    }, 500, corsHeaders);
   }
 };

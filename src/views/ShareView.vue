@@ -251,7 +251,7 @@ const resizeImage = (file, maxSize = 1200) =>
     }
   })
 
-// === BİLDİRİM FONKSİYONU - CORS ÇÖZÜMLÜ ===
+// === BİLDİRİM FONKSİYONU - GÜNCELLENMİŞ CORS ÇÖZÜMLÜ ===
 const triggerNotification = async (postData) => {
   try {
     notificationStatus.value = 'Gönderiliyor...'
@@ -261,7 +261,6 @@ const triggerNotification = async (postData) => {
     // Appwrite Function URL'si
     const functionUrl = 'https://690df0c900255ed6f16a.fra.appwrite.run'
     
-    // CORS hatası için farklı yaklaşım
     const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
@@ -269,7 +268,7 @@ const triggerNotification = async (postData) => {
         'User-Agent': 'Instaile-App/1.0',
         'Accept': 'application/json',
       },
-      mode: 'cors', // cors modunu açıkça belirt
+      mode: 'cors',
       body: JSON.stringify(postData)
     })
     
@@ -284,13 +283,13 @@ const triggerNotification = async (postData) => {
       notificationStatus.value = '✅ Başarılı!'
       console.log('✅ Bildirim başarıyla tetiklendi!')
       if (debugMode.value) {
-        alert(`Bildirim başarıyla gönderildi!\n\n"${result.notification}"`)
+        alert(`Bildirim başarıyla gönderildi!\n\n"${result.notification}"\n\nHedef: ${result.target}`)
       }
     } else {
       notificationStatus.value = '❌ Hata!'
       console.warn('⚠️ Bildirim tetiklenemedi:', result.error)
       if (debugMode.value) {
-        alert(`Bildirim gönderilemedi: ${result.error}`)
+        alert(`Bildirim gönderilemedi: ${result.error}\n\nDetay: ${result.details ? JSON.stringify(result.details) : 'Bilinmeyen hata'}`)
       }
     }
     
@@ -300,11 +299,14 @@ const triggerNotification = async (postData) => {
     notificationStatus.value = '❌ Bağlantı Hatası!'
     console.error('❌ Bildirim tetikleme hatası:', notifError)
     
-    // CORS hatasını özel olarak ele al
-    if (notifError.message.includes('CORS') || notifError.message.includes('Failed to fetch')) {
-      console.warn('🌐 CORS Hatası - Appwrite Function CORS headers gerektiriyor')
+    // Geliştirilmiş CORS hatası kontrolü
+    if (notifError.message.includes('CORS') || 
+        notifError.message.includes('Failed to fetch') || 
+        notifError.message.includes('500') ||
+        notifError.message.includes('Network Error')) {
+      console.warn('🌐 CORS/Bağlantı Hatası - Appwrite Function erişilemiyor')
       if (debugMode.value) {
-        alert(`CORS Hatası: Appwrite Function'ınız CORS headers eklemeniz gerekiyor.\n\nGeçici olarak bildirim gönderilemedi ama gönderiniz başarıyla paylaşıldı.`)
+        alert(`🌐 Bağlantı Hatası: Appwrite Function'a erişilemiyor.\n\nOlası nedenler:\n• CORS headers eksik\n• Function deploy edilmemiş\n• Network bağlantı sorunu\n\nGönderiniz başarıyla paylaşıldı ama bildirim gönderilemedi.`)
       }
     } else {
       if (debugMode.value) {
@@ -315,7 +317,7 @@ const triggerNotification = async (postData) => {
     return { 
       success: false, 
       error: notifError.message,
-      isCorsError: notifError.message.includes('CORS') || notifError.message.includes('Failed to fetch')
+      isCorsError: notifError.message.includes('CORS') || notifError.message.includes('Failed to fetch') || notifError.message.includes('500')
     }
   }
 }
@@ -429,14 +431,23 @@ const sharePost = async () => {
       console.log('📊 Bildirim sonucu:', notificationResult)
     }
 
-    // BAŞARI MESAJI - CORS hatası durumunda farklı mesaj
+    // GELİŞTİRİLMİŞ BAŞARI MESAJI
     if (debugMode.value) {
       if (notificationResult.success) {
-        alert(`✅ Gönderi paylaşıldı!\n\nBildirim başarıyla gönderildi:\n"${notificationResult.notification}"`)
+        alert(`✅ Gönderi paylaşıldı!\n\n📢 Bildirim başarıyla gönderildi:\n"${notificationResult.notification}"\n\n🎯 Hedef: ${notificationResult.target}\n⏱️ Süre: ${notificationResult.deliveryTime || 'Bilinmiyor'}`)
       } else if (notificationResult.isCorsError) {
-        alert(`✅ Gönderi paylaşıldı!\n\n⚠️ CORS Hatası: Appwrite Function CORS headers gerektiriyor.\nGönderiniz başarıyla paylaşıldı ama bildirim gönderilemedi.`)
+        alert(`✅ Gönderi paylaşıldı!\n\n⚠️ Bağlantı Hatası: Appwrite Function'a erişilemiyor.\n\n🔧 Çözüm için:\n1. Function'ı deploy edin\n2. CORS headers ekleyin\n3. Environment variables kontrol edin\n\nGönderiniz başarıyla paylaşıldı ama bildirim gönderilemedi.`)
+      } else if (notificationResult.error && notificationResult.error.includes('OneSignal')) {
+        alert(`✅ Gönderi paylaşıldı!\n\n⚠️ OneSignal Hatası: ${notificationResult.error}\n\nDetay: ${notificationResult.details ? JSON.stringify(notificationResult.details) : 'Bilinmeyen hata'}`)
       } else {
-        alert(`✅ Gönderi paylaşıldı!\n\nBildirim gönderilemedi ama paylaşım başarılı.`)
+        alert(`✅ Gönderi paylaşıldı!\n\n⚠️ Bildirim gönderilemedi:\n${notificationResult.error || 'Bilinmeyen hata'}`)
+      }
+    } else {
+      // Debug modu kapalıysa basit mesaj
+      if (notificationResult.success) {
+        alert('✅ Gönderi başarıyla paylaşıldı ve bildirim gönderildi!')
+      } else {
+        alert('✅ Gönderi başarıyla paylaşıldı! (Bildirim gönderilemedi)')
       }
     }
 
@@ -452,7 +463,13 @@ const sharePost = async () => {
     console.error('❌ sharePost hatası:', err)
     error.value = err?.message || String(err)
     notificationStatus.value = '❌ Paylaşım Hatası!'
-    alert('Hata: ' + (err?.message || String(err)))
+    
+    if (debugMode.value) {
+      alert(`❌ Paylaşım Hatası:\n${err?.message || String(err)}\n\nLütfen konsolu kontrol edin.`)
+    } else {
+      alert('❌ Gönderi paylaşılırken bir hata oluştu. Lütfen tekrar deneyin.')
+    }
+    
     loading.value = false 
   } 
 }
@@ -470,5 +487,36 @@ const sharePost = async () => {
 .gradient-button {
   background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
   color: white !important;
+}
+
+/* Responsive tasarım için ek stiller */
+@media (max-width: 600px) {
+  .v-container {
+    padding: 16px !important;
+  }
+  
+  .v-card {
+    padding: 16px !important;
+  }
+  
+  .dropzone {
+    padding: 40px 16px !important;
+  }
+}
+
+/* Yükleniyor animasyonu */
+.v-btn--loading {
+  position: relative;
+}
+
+.v-btn--loading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: inherit;
 }
 </style>
