@@ -9,6 +9,15 @@
 
       <v-spacer />
 
+      <!-- ⭐ YENİ: BASİT GERİ SAYIM SAYACI -->
+      <div class="countdown-container">
+        <div class="countdown-timer">
+          🎉 Ezel Doğum Günü: 29 Kasım 2025
+        </div>
+      </div>
+
+      <v-spacer />
+
       <v-btn text v-if="authStore.userDetails?.isAdmin" @click="goAdmin">
         Admin Panel
       </v-btn>
@@ -131,6 +140,32 @@ const logout = async () => {
   color: #111 !important;
 }
 
+/* ⭐ YENİ: GERİ SAYIM KONTEYNERİ */
+.countdown-container {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* GERİ SAYIM STİLİ */
+.countdown-timer {
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 500;
+  font-size: 14px;
+  color: #111 !important;
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 6px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
 /* ALT NAV - AÇIK */
 .bottom-nav {
   background: rgba(255,255,255,0.9);
@@ -189,4 +224,4 @@ const logout = async () => {
 .post-caption .hashtag {
   color: #bb0077;
 }
-</style> 
+</style>
