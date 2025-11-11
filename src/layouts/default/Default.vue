@@ -9,6 +9,24 @@
 
       <v-spacer />
 
+      <!-- ⭐ YENİ: GERİ SAYIM SAYACI -->
+      <div class="countdown-container">
+        <a 
+          href="https://logwork.com/countdown-timer" 
+          class="countdown-timer" 
+          data-timezone="Europe/Istanbul" 
+          data-language="tr" 
+          data-date="2025-11-29 19:00"
+          data-textcolor="#111111"
+          data-background="#ffffff"
+          data-digitscolor="#111111"
+        >
+          Ezel Doğum Günü
+        </a>
+      </div>
+
+      <v-spacer />
+
       <v-btn text v-if="authStore.userDetails?.isAdmin" @click="goAdmin">
         Admin Panel
       </v-btn>
@@ -84,13 +102,28 @@ const route = useRoute()
 
 const activeTab = ref('home')
 
+// ⭐ YENİ: Script dinamik yükleme
+const loadCountdownScript = () => {
+  if (typeof window !== 'undefined') {
+    const script = document.createElement('script')
+    script.src = 'https://cdn.logwork.com/widget/countdown.js'
+    script.async = true
+    document.head.appendChild(script)
+  }
+}
+
 const syncTab = () => {
   const name = (route.name || '').toLowerCase()
   if (name.includes('home')) activeTab.value = 'home'
   else if (name.includes('share')) activeTab.value = 'share'
   else if (name.includes('profile')) activeTab.value = 'profile'
 }
-onMounted(syncTab)
+
+onMounted(() => {
+  syncTab()
+  loadCountdownScript() // ⭐ Script'i mounted'da yükle
+})
+
 watch(() => route.fullPath, syncTab)
 
 const goHome = () => router.push({ name: 'Home' })
@@ -112,6 +145,9 @@ const logout = async () => {
 /* ANA FONT = INTER (INSTAGRAM FONT FEEL) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
+/* GERİ SAYIM FONTU = INSTAGRAM STİLİ */
+@import url('https://fonts.googleapis.com/css2?family=Instagram+Sans+Display:wght@400;500;600&display=swap');
+
 * {
   font-family: 'Inter', sans-serif;
 }
@@ -129,6 +165,43 @@ const logout = async () => {
   font-size: 34px;
   letter-spacing: 0.5px;
   color: #111 !important;
+}
+
+/* ⭐ YENİ: GERİ SAYIM KONTEYNERİ */
+.countdown-container {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* GERİ SAYIM STİLİ */
+.countdown-timer {
+  font-family: 'Instagram Sans Display', 'Inter', sans-serif !important;
+  font-weight: 500;
+  font-size: 14px;
+  color: #111 !important;
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 4px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.countdown-timer:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+}
+
+/* Logwork widget responsive ayarı */
+.countdown-timer .lw-countdown {
+  font-family: 'Instagram Sans Display', 'Inter', sans-serif !important;
 }
 
 /* ALT NAV - AÇIK */
@@ -189,4 +262,4 @@ const logout = async () => {
 .post-caption .hashtag {
   color: #bb0077;
 }
-</style> 
+</style>
