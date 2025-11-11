@@ -454,30 +454,7 @@ const sharePost = async () => {
       console.log('📊 Bildirim sonucu:', notificationResult)
     }
 
-    // GELİŞTİRİLMİŞ BAŞARI MESAJI - SADECE ADMIN
-    if (debugMode.value && isAdmin.value) {
-      if (notificationResult.success) {
-        alert(`✅ Gönderi paylaşıldı!\n\n📢 Bildirim başarıyla gönderildi:\n"${notificationResult.notification}"\n\n🎯 Hedef: ${notificationResult.target}\n⏱️ Süre: ${notificationResult.deliveryTime || 'Bilinmiyor'}`)
-      } else if (notificationResult.isCorsError) {
-        alert(`✅ Gönderi paylaşıldı!\n\n⚠️ Bağlantı Hatası: Appwrite Function'a erişilemiyor.\n\n🔧 Çözüm için:\n1. Function'ı deploy edin\n2. CORS headers ekleyin\n3. Environment variables kontrol edin\n\nGönderiniz başarıyla paylaşıldı ama bildirim gönderilemedi.`)
-      } else if (notificationResult.error && notificationResult.error.includes('OneSignal')) {
-        alert(`✅ Gönderi paylaşıldı!\n\n⚠️ OneSignal Hatası: ${notificationResult.error}\n\nDetay: ${notificationResult.details ? JSON.stringify(notificationResult.details) : 'Bilinmeyen hata'}`)
-      } else {
-        alert(`✅ Gönderi paylaşıldı!\n\n⚠️ Bildirim gönderilemedi:\n${notificationResult.error || 'Bilinmeyen hata'}`)
-      }
-    } else {
-      // Normal kullanıcılar için basit mesaj
-      if (notificationResult.success) {
-        alert('✅ Gönderi başarıyla paylaşıldı ve bildirim gönderildi!')
-      } else {
-        alert('✅ Gönderi başarıyla paylaşıldı! (Bildirim gönderilemedi)')
-      }
-    }
-
-    clearForm()
-    loading.value = false 
-    
-    // Ana sayfaya yönlendir
+    Ana sayfaya yönlendir
     setTimeout(() => {
       router.push('/')
     }, 1500)
