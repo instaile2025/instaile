@@ -302,13 +302,11 @@ const triggerNotification = async (postData) => {
       notificationStatus.value = '✅ Başarılı!'
       if (debugMode.value && isAdmin.value) {
         console.log('✅ Bildirim başarıyla tetiklendi!')
-        alert(`Bildirim başarıyla gönderildi!\n\n"${result.notification}"\n\nHedef: ${result.target}`)
       }
     } else {
       notificationStatus.value = '❌ Hata!'
       if (debugMode.value && isAdmin.value) {
         console.warn('⚠️ Bildirim tetiklenemedi:', result.error)
-        alert(`Bildirim gönderilemedi: ${result.error}\n\nDetay: ${result.details ? JSON.stringify(result.details) : 'Bilinmeyen hata'}`)
       }
     }
     
@@ -318,21 +316,6 @@ const triggerNotification = async (postData) => {
     notificationStatus.value = '❌ Bağlantı Hatası!'
     if (debugMode.value && isAdmin.value) {
       console.error('❌ Bildirim tetikleme hatası:', notifError)
-    }
-    
-    // Geliştirilmiş CORS hatası kontrolü
-    if (notifError.message.includes('CORS') || 
-        notifError.message.includes('Failed to fetch') || 
-        notifError.message.includes('500') ||
-        notifError.message.includes('Network Error')) {
-      if (debugMode.value && isAdmin.value) {
-        console.warn('🌐 CORS/Bağlantı Hatası - Appwrite Function erişilemiyor')
-        alert(`🌐 Bağlantı Hatası: Appwrite Function'a erişilemiyor.\n\nOlası nedenler:\n• CORS headers eksik\n• Function deploy edilmemiş\n• Network bağlantı sorunu\n\nGönderiniz başarıyla paylaşıldı ama bildirim gönderilemedi.`)
-      }
-    } else {
-      if (debugMode.value && isAdmin.value) {
-        alert(`Bildirim bağlantı hatası: ${notifError.message}`)
-      }
     }
     
     return { 
@@ -454,10 +437,13 @@ const sharePost = async () => {
       console.log('📊 Bildirim sonucu:', notificationResult)
     }
 
-    Ana sayfaya yönlendir
+    clearForm()
+    loading.value = false 
+    
+    // Ana sayfaya yönlendir (HEMEN - alert yok)
     setTimeout(() => {
       router.push('/')
-    }, 1500)
+    }, 500) // Daha kısa süre
 
   } catch (err) {
     console.error('❌ sharePost hatası:', err)
