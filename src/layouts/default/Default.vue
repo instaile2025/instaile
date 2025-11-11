@@ -9,10 +9,11 @@
 
       <v-spacer />
 
-      <!-- ⭐ YENİ: BASİT GERİ SAYIM SAYACI -->
+      <!-- ⭐ YENİ: KENDİ GERİ SAYIMIMIZ -->
       <div class="countdown-container">
-        <div class="countdown-timer">
-          🎉 Ezel Doğum Günü: 29 Kasım 2025
+        <div class="countdown-timer" @click="toggleCountdown">
+          <span class="countdown-text">🎉 Ezel Doğum Günü</span>
+          <span class="countdown-display">{{ countdownDisplay }}</span>
         </div>
       </div>
 
@@ -83,7 +84,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -92,6 +93,48 @@ const router = useRouter()
 const route = useRoute()
 
 const activeTab = ref('home')
+const showFullCountdown = ref(false)
+
+// ⭐ YENİ: GERİ SAYIM FONKSİYONLARI
+const targetDate = new Date('2025-11-29T19:00:00+03:00') // 29 Kasım 2025, 19:00 İstanbul
+
+const timeLeft = ref({
+  days: 0,
+  hours: 0,
+  minutes: 0,
+  seconds: 0
+})
+
+const countdownDisplay = computed(() => {
+  if (showFullCountdown.value) {
+    return `${timeLeft.value.days}g ${timeLeft.value.hours}s ${timeLeft.value.d minutes}d`
+  } else {
+    return `${timeLeft.value.days}g ${timeLeft.value.hours}s`
+  }
+})
+
+const updateCountdown = () => {
+  const now = new Date().getTime()
+  const distance = targetDate.getTime() - now
+
+  if (distance < 0) {
+    timeLeft.value = { days: 0, hours: 0, minutes: 0, seconds: 0 }
+    return
+  }
+
+  timeLeft.value = {
+    days: Math.floor(distance / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
+    minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
+    seconds: Math.floor((distance % (1000 * 60)) / 1000)
+  }
+}
+
+const toggleCountdown = () => {
+  showFullCountdown.value = !showFullCountdown.value
+}
+
+let countdownInterval = null
 
 const syncTab = () => {
   const name = (route.name || '').toLowerCase()
@@ -99,7 +142,19 @@ const syncTab = () => {
   else if (name.includes('share')) activeTab.value = 'share'
   else if (name.includes('profile')) activeTab.value = 'profile'
 }
-onMounted(syncTab)
+
+onMounted(() => {
+  syncTab()
+  updateCountdown() // Hemen güncelle
+  countdownInterval = setInterval(updateCountdown, 1000) // Her saniye güncelle
+})
+
+onUnmounted(() => {
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+  }
+})
+
 watch(() => route.fullPath, syncTab)
 
 const goHome = () => router.push({ name: 'Home' })
@@ -164,6 +219,32 @@ const logout = async () => {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(0, 0, 0, 0.15);
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.countdown-timer:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(0, 0, 0, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.countdown-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #E1306C;
+}
+
+.countdown-display {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: 0.5px;
 }
 
 /* ALT NAV - AÇIK */
