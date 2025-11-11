@@ -107,7 +107,7 @@ const timeLeft = ref({
 
 const countdownDisplay = computed(() => {
   if (showFullCountdown.value) {
-    return `${timeLeft.value.days}g ${timeLeft.value.hours}s ${timeLeft.value.d minutes}d`
+    return `${timeLeft.value.days}g ${timeLeft.value.hours}s ${timeLeft.value.minutes}d`
   } else {
     return `${timeLeft.value.days}g ${timeLeft.value.hours}s`
   }
