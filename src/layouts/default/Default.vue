@@ -9,7 +9,7 @@
 
       <v-spacer />
 
-      <!-- ⭐ YENİ: GERİ SAYIM SAYACI -->
+      <!-- ⭐ YENİ: GERİ SAYIM SAYACI - ORTAYA EKLENDİ -->
       <div class="countdown-container">
         <a 
           href="https://logwork.com/countdown-timer" 
@@ -102,28 +102,13 @@ const route = useRoute()
 
 const activeTab = ref('home')
 
-// ⭐ YENİ: Script dinamik yükleme
-const loadCountdownScript = () => {
-  if (typeof window !== 'undefined') {
-    const script = document.createElement('script')
-    script.src = 'https://cdn.logwork.com/widget/countdown.js'
-    script.async = true
-    document.head.appendChild(script)
-  }
-}
-
 const syncTab = () => {
   const name = (route.name || '').toLowerCase()
   if (name.includes('home')) activeTab.value = 'home'
   else if (name.includes('share')) activeTab.value = 'share'
   else if (name.includes('profile')) activeTab.value = 'profile'
 }
-
-onMounted(() => {
-  syncTab()
-  loadCountdownScript() // ⭐ Script'i mounted'da yükle
-})
-
+onMounted(syncTab)
 watch(() => route.fullPath, syncTab)
 
 const goHome = () => router.push({ name: 'Home' })
@@ -144,9 +129,6 @@ const logout = async () => {
 
 /* ANA FONT = INTER (INSTAGRAM FONT FEEL) */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-
-/* GERİ SAYIM FONTU = INSTAGRAM STİLİ */
-@import url('https://fonts.googleapis.com/css2?family=Instagram+Sans+Display:wght@400;500;600&display=swap');
 
 * {
   font-family: 'Inter', sans-serif;
@@ -180,7 +162,7 @@ const logout = async () => {
 
 /* GERİ SAYIM STİLİ */
 .countdown-timer {
-  font-family: 'Instagram Sans Display', 'Inter', sans-serif !important;
+  font-family: 'Inter', sans-serif !important;
   font-weight: 500;
   font-size: 14px;
   color: #111 !important;
@@ -197,11 +179,6 @@ const logout = async () => {
   background: rgba(255, 255, 255, 0.9);
   border-color: rgba(0, 0, 0, 0.2);
   transform: translateY(-1px);
-}
-
-/* Logwork widget responsive ayarı */
-.countdown-timer .lw-countdown {
-  font-family: 'Instagram Sans Display', 'Inter', sans-serif !important;
 }
 
 /* ALT NAV - AÇIK */
@@ -263,3 +240,6 @@ const logout = async () => {
   color: #bb0077;
 }
 </style>
+
+<!-- ⭐ YENİ: LOGWORK SCRIPT -->
+<script src="https://cdn.logwork.com/widget/countdown.js"></script>
