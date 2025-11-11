@@ -62,8 +62,9 @@
         hide-details
       ></v-textarea>
 
-      <!-- Debug Modu Switch -->
+      <!-- Debug Modu Switch - SADECE ADMIN GÖRÜR -->
       <v-switch
+        v-if="isAdmin"
         v-model="debugMode"
         label="Debug Modu (Konsola log yazar)"
         color="primary"
@@ -104,9 +105,9 @@
         </v-col>
       </v-row>
 
-      <!-- Debug Bilgisi -->
+      <!-- Debug Bilgisi - SADECE ADMIN GÖRÜR -->
       <v-alert
-        v-if="debugMode && lastPostData"
+        v-if="isAdmin && debugMode && lastPostData"
         type="info"
         variant="tonal"
         class="mt-4"
@@ -127,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router' 
 import { useAuthStore } from '@/stores/auth' 
 import { storage, databases, account } from '@/plugins/appwrite'
@@ -144,7 +145,21 @@ const error = ref(null)
 const fileInput = ref(null)
 const debugMode = ref(false)
 const lastPostData = ref(null)
-const notificationStatus = ref('') // YENİ: Bildirim durumu
+const notificationStatus = ref('')
+
+// ⭐ ADMIN KONTROLÜ - Sadece adminler debug modunu görsün
+const isAdmin = computed(() => {
+  const user = authStore.authUser
+  if (!user) return false
+  
+  // Admin kontrolü - email, username veya özel bir role göre
+  const adminEmails = ['admin@instaile.com', 'melikdurak@outlook.com'] // Admin emailleri
+  const adminUsernames = ['admin', 'Melo1903', 'yönetici'] // Admin kullanıcı adları
+  
+  return adminEmails.includes(user.email) || 
+         adminUsernames.includes(authStore.userDetails?.username) ||
+         authStore.userDetails?.role === 'admin'
+})
 
 const triggerFileInput = () => {
   if (fileInput.value) {
@@ -187,7 +202,7 @@ const onFileSelect = (e) => {
       if (img.width && img.height) {
         preview.value = url
         selectedFile.value = file
-        if (debugMode.value) console.log('🖼️ Resim seçildi:', file.name, `${img.width}x${img.height}`)
+        if (debugMode.value && isAdmin.value) console.log('🖼️ Resim seçildi:', file.name, `${img.width}x${img.height}`)
       } else {
         selectedFile.value = null
         preview.value = null
@@ -206,7 +221,7 @@ const onFileSelect = (e) => {
 
   selectedFile.value = file
   preview.value = null
-  if (debugMode.value) console.log('📁 Dosya seçildi:', file.name, file.type)
+  if (debugMode.value && isAdmin.value) console.log('📁 Dosya seçildi:', file.name, file.type)
 }
 
 // === RESİM KÜÇÜLTME FONKSİYONU ===
@@ -241,7 +256,7 @@ const resizeImage = (file, maxSize = 1200) =>
         URL.revokeObjectURL(url)
         if (!blob) return resolve(file)
         const newFile = new File([blob], file.name, { type: file.type })
-        if (debugMode.value) console.log('📐 Resim optimize edildi:', `${width}x${height}`)
+        if (debugMode.value && isAdmin.value) console.log('📐 Resim optimize edildi:', `${width}x${height}`)
         resolve(newFile)
       }, file.type, 0.85)
     }
@@ -255,8 +270,10 @@ const resizeImage = (file, maxSize = 1200) =>
 const triggerNotification = async (postData) => {
   try {
     notificationStatus.value = 'Gönderiliyor...'
-    console.log('🚀 Bildirim fonksiyonu manuel çağrılıyor...')
-    console.log('📦 Gönderilen veri:', postData)
+    if (debugMode.value && isAdmin.value) {
+      console.log('🚀 Bildirim fonksiyonu manuel çağrılıyor...')
+      console.log('📦 Gönderilen veri:', postData)
+    }
     
     // Appwrite Function URL'si
     const functionUrl = 'https://690df0c900255ed6f16a.fra.appwrite.run'
@@ -277,18 +294,20 @@ const triggerNotification = async (postData) => {
     }
     
     const result = await response.json()
-    console.log('📨 Bildirim fonksiyonu yanıtı:', result)
+    if (debugMode.value && isAdmin.value) {
+      console.log('📨 Bildirim fonksiyonu yanıtı:', result)
+    }
     
     if (result.success) {
       notificationStatus.value = '✅ Başarılı!'
-      console.log('✅ Bildirim başarıyla tetiklendi!')
-      if (debugMode.value) {
+      if (debugMode.value && isAdmin.value) {
+        console.log('✅ Bildirim başarıyla tetiklendi!')
         alert(`Bildirim başarıyla gönderildi!\n\n"${result.notification}"\n\nHedef: ${result.target}`)
       }
     } else {
       notificationStatus.value = '❌ Hata!'
-      console.warn('⚠️ Bildirim tetiklenemedi:', result.error)
-      if (debugMode.value) {
+      if (debugMode.value && isAdmin.value) {
+        console.warn('⚠️ Bildirim tetiklenemedi:', result.error)
         alert(`Bildirim gönderilemedi: ${result.error}\n\nDetay: ${result.details ? JSON.stringify(result.details) : 'Bilinmeyen hata'}`)
       }
     }
@@ -297,19 +316,21 @@ const triggerNotification = async (postData) => {
     
   } catch (notifError) {
     notificationStatus.value = '❌ Bağlantı Hatası!'
-    console.error('❌ Bildirim tetikleme hatası:', notifError)
+    if (debugMode.value && isAdmin.value) {
+      console.error('❌ Bildirim tetikleme hatası:', notifError)
+    }
     
     // Geliştirilmiş CORS hatası kontrolü
     if (notifError.message.includes('CORS') || 
         notifError.message.includes('Failed to fetch') || 
         notifError.message.includes('500') ||
         notifError.message.includes('Network Error')) {
-      console.warn('🌐 CORS/Bağlantı Hatası - Appwrite Function erişilemiyor')
-      if (debugMode.value) {
+      if (debugMode.value && isAdmin.value) {
+        console.warn('🌐 CORS/Bağlantı Hatası - Appwrite Function erişilemiyor')
         alert(`🌐 Bağlantı Hatası: Appwrite Function'a erişilemiyor.\n\nOlası nedenler:\n• CORS headers eksik\n• Function deploy edilmemiş\n• Network bağlantı sorunu\n\nGönderiniz başarıyla paylaşıldı ama bildirim gönderilemedi.`)
       }
     } else {
-      if (debugMode.value) {
+      if (debugMode.value && isAdmin.value) {
         alert(`Bildirim bağlantı hatası: ${notifError.message}`)
       }
     }
@@ -351,7 +372,7 @@ const sharePost = async () => {
 
     // DOSYA YÜKLEME
     if (selectedFile.value) { 
-      if (debugMode.value) console.log('⬆️ Dosya yükleniyor...', selectedFile.value.name)
+      if (debugMode.value && isAdmin.value) console.log('⬆️ Dosya yükleniyor...', selectedFile.value.name)
       
       const uploadFile = selectedFile.value.type.startsWith('image')
         ? await resizeImage(selectedFile.value)
@@ -373,7 +394,7 @@ const sharePost = async () => {
       else if (uploadFile.type.startsWith('video')) postType = 'video'
       else if (uploadFile.type.startsWith('audio')) postType = 'audio'
 
-      if (debugMode.value) console.log('✅ Dosya yüklendi:', uploaded.$id, postType)
+      if (debugMode.value && isAdmin.value) console.log('✅ Dosya yüklendi:', uploaded.$id, postType)
     }
 
     const docPermissions = [
@@ -399,7 +420,7 @@ const sharePost = async () => {
       throw new Error("Paylaşmak için metin veya dosya girmelisiniz.")
     }
 
-    if (debugMode.value) {
+    if (debugMode.value && isAdmin.value) {
       console.log('📝 Gönderi verisi hazır:', postData)
     }
 
@@ -412,27 +433,29 @@ const sharePost = async () => {
       docPermissions
     )
 
-    console.log('✅ GÖNDERİ OLUŞTURULDU:', created.$id)
-    console.log('👤 Gönderen:', created.authorUsername)
-    console.log('📝 Metin:', created.text || 'Boş')
-    console.log('🎨 Tip:', created.postType)
+    if (debugMode.value && isAdmin.value) {
+      console.log('✅ GÖNDERİ OLUŞTURULDU:', created.$id)
+      console.log('👤 Gönderen:', created.authorUsername)
+      console.log('📝 Metin:', created.text || 'Boş')
+      console.log('🎨 Tip:', created.postType)
+    }
 
     // Debug için son gönderi bilgisini kaydet
     lastPostData.value = created
 
     // 2. SONRA BİLDİRİMİ MANUEL TETİKLE
-    if (debugMode.value) {
+    if (debugMode.value && isAdmin.value) {
       console.log('🚀 Manuel bildirim tetikleniyor...')
     }
     
     const notificationResult = await triggerNotification(created)
     
-    if (debugMode.value) {
+    if (debugMode.value && isAdmin.value) {
       console.log('📊 Bildirim sonucu:', notificationResult)
     }
 
-    // GELİŞTİRİLMİŞ BAŞARI MESAJI
-    if (debugMode.value) {
+    // GELİŞTİRİLMİŞ BAŞARI MESAJI - SADECE ADMIN
+    if (debugMode.value && isAdmin.value) {
       if (notificationResult.success) {
         alert(`✅ Gönderi paylaşıldı!\n\n📢 Bildirim başarıyla gönderildi:\n"${notificationResult.notification}"\n\n🎯 Hedef: ${notificationResult.target}\n⏱️ Süre: ${notificationResult.deliveryTime || 'Bilinmiyor'}`)
       } else if (notificationResult.isCorsError) {
@@ -443,7 +466,7 @@ const sharePost = async () => {
         alert(`✅ Gönderi paylaşıldı!\n\n⚠️ Bildirim gönderilemedi:\n${notificationResult.error || 'Bilinmeyen hata'}`)
       }
     } else {
-      // Debug modu kapalıysa basit mesaj
+      // Normal kullanıcılar için basit mesaj
       if (notificationResult.success) {
         alert('✅ Gönderi başarıyla paylaşıldı ve bildirim gönderildi!')
       } else {
@@ -464,7 +487,7 @@ const sharePost = async () => {
     error.value = err?.message || String(err)
     notificationStatus.value = '❌ Paylaşım Hatası!'
     
-    if (debugMode.value) {
+    if (debugMode.value && isAdmin.value) {
       alert(`❌ Paylaşım Hatası:\n${err?.message || String(err)}\n\nLütfen konsolu kontrol edin.`)
     } else {
       alert('❌ Gönderi paylaşılırken bir hata oluştu. Lütfen tekrar deneyin.')
